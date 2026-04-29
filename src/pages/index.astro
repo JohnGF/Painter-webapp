@@ -13,6 +13,12 @@ import Layout from '../layouts/Layout.astro';
       </div>
 
       <div class="drawing-controls">
+        <div class="control-item tool-selector">
+          <button id="tool-brush" class="tool-btn active">Brush</button>
+          <button id="tool-eraser" class="tool-btn">Eraser</button>
+          <button id="tool-sprayer" class="tool-btn">Sprayer</button>
+        </div>
+
         <div class="control-item">
           <label for="color-picker">Color:</label>
           <input type="color" id="color-picker" value="#ff0000" />
@@ -24,11 +30,12 @@ import Layout from '../layouts/Layout.astro';
           <span id="brush-size-display">5</span>
         </div>
 
-        <button id="clear-btn">Clear Canvas</button>
+        <button id="clear-btn">Clear Drawing</button>
       </div>
     </div>
 
-    <div class="canvas-container">
+    <div class="canvas-container" id="canvas-wrapper">
+      <canvas id="bg-canvas"></canvas>
       <canvas id="drawing-canvas"></canvas>
     </div>
   </main>
@@ -72,6 +79,7 @@ import Layout from '../layouts/Layout.astro';
   }
 
   .canvas-container {
+    position: relative;
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -88,7 +96,41 @@ import Layout from '../layouts/Layout.astro';
     touch-action: none;
     cursor: crosshair;
     display: block;
+  }
+
+  #bg-canvas {
+    position: relative;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  #drawing-canvas {
+    position: absolute;
+    top: 10px; /* match padding of container */
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .tool-selector {
+    display: flex;
+    gap: 5px;
+    background: #e0e0e0;
+    padding: 4px;
+    border-radius: 6px;
+  }
+
+  .tool-btn {
+    background-color: transparent;
+    color: #333;
+    padding: 6px 12px;
+  }
+
+  .tool-btn:hover {
+    background-color: #d0d0d0;
+  }
+
+  .tool-btn.active {
+    background-color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   }
 
   button {
@@ -107,6 +149,9 @@ import Layout from '../layouts/Layout.astro';
 </style>
 
 <script>
+  const bgCanvas = document.getElementById('bg-canvas') as HTMLCanvasElement;
+  const bgCtx = bgCanvas.getContext('2d');
+
   const canvas = document.getElementById('drawing-canvas') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
@@ -116,14 +161,26 @@ import Layout from '../layouts/Layout.astro';
   const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
 
-  // Default canvas size
-  canvas.width = 800;
-  canvas.height = 600;
+  // Tool buttons
+  const btnBrush = document.getElementById('tool-brush') as HTMLButtonElement;
+  const btnEraser = document.getElementById('tool-eraser') as HTMLButtonElement;
+  const btnSprayer = document.getElementById('tool-sprayer') as HTMLButtonElement;
 
-  // Fill with white background initially
-  if (ctx) {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let currentTool: 'brush' | 'eraser' | 'sprayer' = 'brush';
+
+  // Default canvas size
+  const defaultWidth = 800;
+  const defaultHeight = 600;
+
+  bgCanvas.width = defaultWidth;
+  bgCanvas.height = defaultHeight;
+  canvas.width = defaultWidth;
+  canvas.height = defaultHeight;
+
+  // Fill background canvas with white initially
+  if (bgCtx) {
+    bgCtx.fillStyle = '#ffffff';
+    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
   }
 
   // Handle image upload
@@ -155,11 +212,19 @@ import Layout from '../layouts/Layout.astro';
           height = MAX_HEIGHT;
         }
 
+        bgCanvas.width = width;
+        bgCanvas.height = height;
         canvas.width = width;
         canvas.height = height;
 
+        if (bgCtx) {
+          // Clear any previous image/background
+          bgCtx.clearRect(0, 0, width, height);
+          bgCtx.drawImage(img, 0, 0, width, height);
+        }
+
         if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
+          ctx.clearRect(0, 0, width, height);
         }
       };
 
@@ -170,13 +235,10 @@ import Layout from '../layouts/Layout.astro';
     reader.readAsDataURL(file);
   });
 
-  // Handle clear button
+  // Handle clear button - clears ONLY the drawing layer
   clearBtn.addEventListener('click', () => {
     if (ctx) {
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      // Reset file input so they can re-upload the same image
-      imageUpload.value = '';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
   });
 
@@ -184,6 +246,26 @@ import Layout from '../layouts/Layout.astro';
   brushSize.addEventListener('input', () => {
     brushSizeDisplay.textContent = brushSize.value;
   });
+
+  // Handle tool selection
+  function setActiveTool(tool: 'brush' | 'eraser' | 'sprayer', btn: HTMLButtonElement) {
+    currentTool = tool;
+
+    // Update UI
+    [btnBrush, btnEraser, btnSprayer].forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Update cursor depending on tool
+    if (tool === 'eraser') {
+      canvas.style.cursor = 'cell';
+    } else {
+      canvas.style.cursor = 'crosshair';
+    }
+  }
+
+  btnBrush.addEventListener('click', () => setActiveTool('brush', btnBrush));
+  btnEraser.addEventListener('click', () => setActiveTool('eraser', btnEraser));
+  btnSprayer.addEventListener('click', () => setActiveTool('sprayer', btnSprayer));
 
   // Drawing state
   let isDrawing = false;
@@ -201,8 +283,12 @@ import Layout from '../layouts/Layout.astro';
     lastX = (e.clientX - rect.left) * scaleX;
     lastY = (e.clientY - rect.top) * scaleY;
 
-    // Support drawing single dots on tap/click
-    draw(e);
+    if (currentTool === 'sprayer') {
+      startSpraying();
+    } else {
+      // Support drawing single dots on tap/click for brush/eraser
+      draw(e);
+    }
   }
 
   function draw(e: PointerEvent) {
@@ -218,23 +304,85 @@ import Layout from '../layouts/Layout.astro';
     const currentX = (e.clientX - rect.left) * scaleX;
     const currentY = (e.clientY - rect.top) * scaleY;
 
-    ctx.beginPath();
-    ctx.moveTo(lastX, lastY);
-    ctx.lineTo(currentX, currentY);
-    ctx.strokeStyle = colorPicker.value;
-    ctx.lineWidth = parseInt(brushSize.value, 10);
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.stroke();
+    const size = parseInt(brushSize.value, 10);
+
+    if (currentTool === 'brush' || currentTool === 'eraser') {
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(currentX, currentY);
+
+      if (currentTool === 'eraser') {
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = size; // Usually want eraser to be a bit thicker, or just use the slider
+        ctx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter for destination-out
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = colorPicker.value;
+        ctx.lineWidth = size;
+      }
+
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      // Reset composite operation so it doesn't affect other drawings
+      ctx.globalCompositeOperation = 'source-over';
+    } else if (currentTool === 'sprayer') {
+      // Sprayer is handled differently, often with an interval,
+      // but we can also spray immediately on move
+      spray(currentX, currentY, size);
+    }
 
     lastX = currentX;
     lastY = currentY;
+  }
+
+  // Sprayer functionality
+  let sprayInterval: number | null = null;
+
+  function spray(x: number, y: number, size: number) {
+    if (!ctx) return;
+
+    // Adjust density based on size
+    const density = size * 2;
+
+    ctx.fillStyle = colorPicker.value;
+    ctx.globalCompositeOperation = 'source-over';
+
+    for (let i = 0; i < density; i++) {
+      const offsetX = (Math.random() * size * 2) - size;
+      const offsetY = (Math.random() * size * 2) - size;
+
+      // Make it roughly circular
+      if (offsetX * offsetX + offsetY * offsetY <= size * size) {
+        ctx.fillRect(x + offsetX, y + offsetY, 1, 1);
+      }
+    }
+  }
+
+  function startSpraying() {
+    if (sprayInterval !== null) clearInterval(sprayInterval);
+    const size = parseInt(brushSize.value, 10);
+
+    // Spray immediately once
+    spray(lastX, lastY, size);
+
+    // And set up interval to keep spraying while holding down
+    sprayInterval = window.setInterval(() => {
+      if (isDrawing) {
+        spray(lastX, lastY, size);
+      }
+    }, 50); // Spray every 50ms
   }
 
   function stopDrawing() {
     isDrawing = false;
     if (ctx) {
       ctx.beginPath(); // Reset path to prevent connecting unexpected lines
+    }
+    if (sprayInterval !== null) {
+      clearInterval(sprayInterval);
+      sprayInterval = null;
     }
   }
 
