@@ -1,0 +1,251 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout>
+  <main class="container">
+    <h1>Image Painter</h1>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="image-upload" class="file-label">Upload Image</label>
+        <input type="file" id="image-upload" accept="image/*" />
+      </div>
+
+      <div class="drawing-controls">
+        <div class="control-item">
+          <label for="color-picker">Color:</label>
+          <input type="color" id="color-picker" value="#ff0000" />
+        </div>
+
+        <div class="control-item">
+          <label for="brush-size">Size:</label>
+          <input type="range" id="brush-size" min="1" max="50" value="5" />
+          <span id="brush-size-display">5</span>
+        </div>
+
+        <button id="clear-btn">Clear Canvas</button>
+      </div>
+    </div>
+
+    <div class="canvas-container">
+      <canvas id="drawing-canvas"></canvas>
+    </div>
+  </main>
+</Layout>
+
+<style>
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  }
+
+  h1 {
+    text-align: center;
+    color: #333;
+  }
+
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+  }
+
+  .drawing-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .control-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .canvas-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    background-color: #fff;
+    min-height: 400px;
+    overflow: auto; /* Allow scrolling if canvas is larger than container */
+    padding: 10px;
+  }
+
+  canvas {
+    /* touch-action: none is critical for Safari/iOS to prevent page scrolling while drawing */
+    touch-action: none;
+    cursor: crosshair;
+    display: block;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  button {
+    padding: 8px 16px;
+    background-color: #ff4757;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  button:hover {
+    background-color: #ff6b81;
+  }
+</style>
+
+<script>
+  const canvas = document.getElementById('drawing-canvas') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
+  const colorPicker = document.getElementById('color-picker') as HTMLInputElement;
+  const brushSize = document.getElementById('brush-size') as HTMLInputElement;
+  const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
+  const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
+
+  // Default canvas size
+  canvas.width = 800;
+  canvas.height = 600;
+
+  // Fill with white background initially
+  if (ctx) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  // Handle image upload
+  imageUpload.addEventListener('change', (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize canvas to fit image, or scale image to fit canvas?
+        // Let's set canvas size to match image for better fidelity
+
+        // Let's cap max size to prevent memory issues, but keep aspect ratio
+        const MAX_WIDTH = 1000;
+        const MAX_HEIGHT = 800;
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        if (height > MAX_HEIGHT) {
+          width = Math.round((width * MAX_HEIGHT) / height);
+          height = MAX_HEIGHT;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+        }
+      };
+
+      if (event.target?.result) {
+        img.src = event.target.result as string;
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Handle clear button
+  clearBtn.addEventListener('click', () => {
+    if (ctx) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Reset file input so they can re-upload the same image
+      imageUpload.value = '';
+    }
+  });
+
+  // Update brush size display
+  brushSize.addEventListener('input', () => {
+    brushSizeDisplay.textContent = brushSize.value;
+  });
+
+  // Drawing state
+  let isDrawing = false;
+  let lastX = 0;
+  let lastY = 0;
+
+  function startDrawing(e: PointerEvent) {
+    isDrawing = true;
+
+    // Get correct coordinates relative to the canvas
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    lastX = (e.clientX - rect.left) * scaleX;
+    lastY = (e.clientY - rect.top) * scaleY;
+
+    // Support drawing single dots on tap/click
+    draw(e);
+  }
+
+  function draw(e: PointerEvent) {
+    if (!isDrawing || !ctx) return;
+
+    // Prevent default to avoid scrolling on touch devices
+    e.preventDefault();
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const currentX = (e.clientX - rect.left) * scaleX;
+    const currentY = (e.clientY - rect.top) * scaleY;
+
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(currentX, currentY);
+    ctx.strokeStyle = colorPicker.value;
+    ctx.lineWidth = parseInt(brushSize.value, 10);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    lastX = currentX;
+    lastY = currentY;
+  }
+
+  function stopDrawing() {
+    isDrawing = false;
+    if (ctx) {
+      ctx.beginPath(); // Reset path to prevent connecting unexpected lines
+    }
+  }
+
+  // Pointer events (works for mouse, touch, and stylus)
+  canvas.addEventListener('pointerdown', startDrawing);
+  canvas.addEventListener('pointermove', draw);
+  canvas.addEventListener('pointerup', stopDrawing);
+  canvas.addEventListener('pointerout', stopDrawing);
+  canvas.addEventListener('pointercancel', stopDrawing);
+
+  // Prevent default touch behaviors on the canvas to stop scrolling
+  canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+  canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+</script>
