@@ -37,6 +37,7 @@ import Layout from '../layouts/Layout.astro';
           <input type="number" id="polygon-sides" min="3" max="20" value="5" style="width: 40px;" />
         </div>
 
+        <button id="undo-btn" style="background-color: #f39c12;">Undo</button>
         <button id="clear-btn">Clear Drawing</button>
         <button id="export-btn" style="background-color: #2ed573;">Export Image</button>
       </div>
@@ -167,6 +168,7 @@ import Layout from '../layouts/Layout.astro';
   const colorPicker = document.getElementById('color-picker') as HTMLInputElement;
   const brushSize = document.getElementById('brush-size') as HTMLInputElement;
   const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
+  const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
   const polygonControls = document.getElementById('polygon-controls') as HTMLDivElement;
@@ -180,6 +182,18 @@ import Layout from '../layouts/Layout.astro';
   const btnPolygon = document.getElementById('tool-polygon') as HTMLButtonElement;
 
   let currentTool: 'brush' | 'eraser' | 'sprayer' | 'crayon' | 'polygon' = 'brush';
+
+  // Undo stack
+  const MAX_UNDO_STEPS = 20;
+  let undoStack: ImageData[] = [];
+
+  function saveUndoState() {
+    if (!ctx) return;
+    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (undoStack.length > MAX_UNDO_STEPS) {
+      undoStack.shift(); // Remove oldest state
+    }
+  }
 
   // Default canvas size
   const defaultWidth = 800;
@@ -240,6 +254,9 @@ import Layout from '../layouts/Layout.astro';
           ctx.clearRect(0, 0, width, height);
         }
 
+        // Clear undo stack when loading a new image to prevent dimension mismatches
+        undoStack = [];
+
         // Save state after image upload
         // Need to wait slightly for image to be drawn
         setTimeout(saveState, 50);
@@ -255,8 +272,20 @@ import Layout from '../layouts/Layout.astro';
   // Handle clear button - clears ONLY the drawing layer
   clearBtn.addEventListener('click', () => {
     if (ctx) {
+      saveUndoState();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       saveState();
+    }
+  });
+
+  // Handle undo button
+  undoBtn.addEventListener('click', () => {
+    if (undoStack.length > 0 && ctx) {
+      const lastState = undoStack.pop();
+      if (lastState) {
+        ctx.putImageData(lastState, 0, 0);
+        saveState();
+      }
     }
   });
 
@@ -327,6 +356,9 @@ import Layout from '../layouts/Layout.astro';
 
   function startDrawing(e: PointerEvent) {
     isDrawing = true;
+
+    // Save the undo state before we modify the canvas
+    saveUndoState();
 
     // Get correct coordinates relative to the canvas
     const rect = canvas.getBoundingClientRect();
