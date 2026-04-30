@@ -37,6 +37,8 @@ import Layout from '../layouts/Layout.astro';
           <input type="number" id="polygon-sides" min="3" max="20" value="5" style="width: 40px;" />
         </div>
 
+        <button id="undo-btn" style="background-color: #f39c12;">Undo</button>
+        <button id="redo-btn" style="background-color: #f39c12;">Redo</button>
         <button id="clear-btn">Clear Drawing</button>
         <button id="export-btn" style="background-color: #2ed573;">Export Image</button>
       </div>
@@ -167,6 +169,8 @@ import Layout from '../layouts/Layout.astro';
   const colorPicker = document.getElementById('color-picker') as HTMLInputElement;
   const brushSize = document.getElementById('brush-size') as HTMLInputElement;
   const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
+  const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
+  const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
   const polygonControls = document.getElementById('polygon-controls') as HTMLDivElement;
@@ -180,6 +184,22 @@ import Layout from '../layouts/Layout.astro';
   const btnPolygon = document.getElementById('tool-polygon') as HTMLButtonElement;
 
   let currentTool: 'brush' | 'eraser' | 'sprayer' | 'crayon' | 'polygon' = 'brush';
+
+  // Undo stack
+  const MAX_UNDO_STEPS = 20;
+  let undoStack: ImageData[] = [];
+  let redoStack: ImageData[] = [];
+
+  function saveUndoState(clearRedo: boolean = true) {
+    if (!ctx) return;
+    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    if (undoStack.length > MAX_UNDO_STEPS) {
+      undoStack.shift(); // Remove oldest state
+    }
+    if (clearRedo) {
+      redoStack = []; // Clear redo stack on new actions
+    }
+  }
 
   // Default canvas size
   const defaultWidth = 800;
@@ -240,6 +260,10 @@ import Layout from '../layouts/Layout.astro';
           ctx.clearRect(0, 0, width, height);
         }
 
+        // Clear undo stack when loading a new image to prevent dimension mismatches
+        undoStack = [];
+        redoStack = [];
+
         // Save state after image upload
         // Need to wait slightly for image to be drawn
         setTimeout(saveState, 50);
@@ -255,8 +279,33 @@ import Layout from '../layouts/Layout.astro';
   // Handle clear button - clears ONLY the drawing layer
   clearBtn.addEventListener('click', () => {
     if (ctx) {
+      saveUndoState();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       saveState();
+    }
+  });
+
+  // Handle undo button
+  undoBtn.addEventListener('click', () => {
+    if (undoStack.length > 0 && ctx) {
+      redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      const lastState = undoStack.pop();
+      if (lastState) {
+        ctx.putImageData(lastState, 0, 0);
+        saveState();
+      }
+    }
+  });
+
+  // Handle redo button
+  redoBtn.addEventListener('click', () => {
+    if (redoStack.length > 0 && ctx) {
+      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      const nextState = redoStack.pop();
+      if (nextState) {
+        ctx.putImageData(nextState, 0, 0);
+        saveState();
+      }
     }
   });
 
@@ -267,13 +316,13 @@ import Layout from '../layouts/Layout.astro';
     exportCanvas.width = bgCanvas.width;
     exportCanvas.height = bgCanvas.height;
     const exportCtx = exportCanvas.getContext('2d');
-
+    
     if (exportCtx) {
       // Draw background
       exportCtx.drawImage(bgCanvas, 0, 0);
       // Draw drawings on top
       exportCtx.drawImage(canvas, 0, 0);
-
+      
       // Trigger download
       const dataURL = exportCanvas.toDataURL('image/png');
       const link = document.createElement('a');
@@ -327,6 +376,9 @@ import Layout from '../layouts/Layout.astro';
 
   function startDrawing(e: PointerEvent) {
     isDrawing = true;
+
+    // Save the undo state before we modify the canvas
+    saveUndoState();
 
     // Get correct coordinates relative to the canvas
     const rect = canvas.getBoundingClientRect();
@@ -393,24 +445,24 @@ import Layout from '../layouts/Layout.astro';
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.globalAlpha = 0.4;
-
+      
       const distance = Math.sqrt(Math.pow(currentX - lastX, 2) + Math.pow(currentY - lastY, 2));
       const steps = Math.max(1, Math.floor(distance / 2));
-
+      
       for (let i = 0; i < steps; i++) {
         const t = i / steps;
         const x = lastX + (currentX - lastX) * t;
         const y = lastY + (currentY - lastY) * t;
-
+        
         ctx.beginPath();
         // Add random jitter for texture
         const jitterX = (Math.random() - 0.5) * size * 0.5;
         const jitterY = (Math.random() - 0.5) * size * 0.5;
-
+        
         ctx.moveTo(x + jitterX, y + jitterY);
         // Draw tiny lines for texture
         ctx.lineTo(x + jitterX + 1, y + jitterY + 1);
-
+        
         ctx.lineWidth = size * (0.8 + Math.random() * 0.4); // Vary thickness slightly
         ctx.stroke();
       }
@@ -435,10 +487,10 @@ import Layout from '../layouts/Layout.astro';
 
   function drawPolygon(x1: number, y1: number, x2: number, y2: number, sides: number, size: number) {
     if (!ctx || sides < 3) return;
-
+    
     const radius = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     const angle = Math.atan2(y2 - y1, x2 - x1);
-
+    
     ctx.beginPath();
     for (let i = 0; i <= sides; i++) {
       const curAngle = angle + (i * 2 * Math.PI / sides);
@@ -450,7 +502,7 @@ import Layout from '../layouts/Layout.astro';
         ctx.lineTo(px, py);
       }
     }
-
+    
     ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = colorPicker.value;
     ctx.lineWidth = size;
@@ -556,7 +608,7 @@ import Layout from '../layouts/Layout.astro';
       clearInterval(sprayInterval);
       sprayInterval = null;
     }
-
+    
     // Save state after drawing ends
     saveState();
   }
