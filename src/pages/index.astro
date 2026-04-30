@@ -239,6 +239,10 @@ import Layout from '../layouts/Layout.astro';
         if (ctx) {
           ctx.clearRect(0, 0, width, height);
         }
+
+        // Save state after image upload
+        // Need to wait slightly for image to be drawn
+        setTimeout(saveState, 50);
       };
 
       if (event.target?.result) {
@@ -252,6 +256,7 @@ import Layout from '../layouts/Layout.astro';
   clearBtn.addEventListener('click', () => {
     if (ctx) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      saveState();
     }
   });
 
@@ -492,7 +497,57 @@ import Layout from '../layouts/Layout.astro';
     }, 50); // Spray every 50ms
   }
 
+  function saveState() {
+    try {
+      localStorage.setItem('painter-bg', bgCanvas.toDataURL());
+      localStorage.setItem('painter-drawing', canvas.toDataURL());
+      localStorage.setItem('painter-width', canvas.width.toString());
+      localStorage.setItem('painter-height', canvas.height.toString());
+    } catch (e) {
+      console.error('Failed to save to localStorage', e);
+    }
+  }
+
+  function loadState() {
+    try {
+      const bgData = localStorage.getItem('painter-bg');
+      const drawingData = localStorage.getItem('painter-drawing');
+      const w = localStorage.getItem('painter-width');
+      const h = localStorage.getItem('painter-height');
+
+      if (bgData && drawingData && w && h) {
+        const width = parseInt(w, 10);
+        const height = parseInt(h, 10);
+
+        bgCanvas.width = width;
+        bgCanvas.height = height;
+        canvas.width = width;
+        canvas.height = height;
+
+        const bgImg = new Image();
+        bgImg.onload = () => {
+          bgCtx?.clearRect(0, 0, width, height);
+          bgCtx?.drawImage(bgImg, 0, 0);
+        };
+        bgImg.src = bgData;
+
+        const drawImg = new Image();
+        drawImg.onload = () => {
+          ctx?.clearRect(0, 0, width, height);
+          ctx?.drawImage(drawImg, 0, 0);
+        };
+        drawImg.src = drawingData;
+      }
+    } catch (e) {
+      console.error('Failed to load from localStorage', e);
+    }
+  }
+
+  // Load state on startup
+  loadState();
+
   function stopDrawing() {
+    if (!isDrawing) return;
     isDrawing = false;
     if (ctx) {
       ctx.beginPath(); // Reset path to prevent connecting unexpected lines
@@ -501,6 +556,9 @@ import Layout from '../layouts/Layout.astro';
       clearInterval(sprayInterval);
       sprayInterval = null;
     }
+
+    // Save state after drawing ends
+    saveState();
   }
 
   // Pointer events (works for mouse, touch, and stylus)
