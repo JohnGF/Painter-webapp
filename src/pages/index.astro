@@ -38,6 +38,7 @@ import Layout from '../layouts/Layout.astro';
         </div>
 
         <button id="undo-btn" style="background-color: #f39c12;">Undo</button>
+        <button id="redo-btn" style="background-color: #f39c12;">Redo</button>
         <button id="clear-btn">Clear Drawing</button>
         <button id="export-btn" style="background-color: #2ed573;">Export Image</button>
       </div>
@@ -169,6 +170,7 @@ import Layout from '../layouts/Layout.astro';
   const brushSize = document.getElementById('brush-size') as HTMLInputElement;
   const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
+  const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
   const polygonControls = document.getElementById('polygon-controls') as HTMLDivElement;
@@ -186,12 +188,16 @@ import Layout from '../layouts/Layout.astro';
   // Undo stack
   const MAX_UNDO_STEPS = 20;
   let undoStack: ImageData[] = [];
+  let redoStack: ImageData[] = [];
 
-  function saveUndoState() {
+  function saveUndoState(clearRedo: boolean = true) {
     if (!ctx) return;
     undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
     if (undoStack.length > MAX_UNDO_STEPS) {
       undoStack.shift(); // Remove oldest state
+    }
+    if (clearRedo) {
+      redoStack = []; // Clear redo stack on new actions
     }
   }
 
@@ -256,6 +262,7 @@ import Layout from '../layouts/Layout.astro';
 
         // Clear undo stack when loading a new image to prevent dimension mismatches
         undoStack = [];
+        redoStack = [];
 
         // Save state after image upload
         // Need to wait slightly for image to be drawn
@@ -281,9 +288,22 @@ import Layout from '../layouts/Layout.astro';
   // Handle undo button
   undoBtn.addEventListener('click', () => {
     if (undoStack.length > 0 && ctx) {
+      redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
       const lastState = undoStack.pop();
       if (lastState) {
         ctx.putImageData(lastState, 0, 0);
+        saveState();
+      }
+    }
+  });
+
+  // Handle redo button
+  redoBtn.addEventListener('click', () => {
+    if (redoStack.length > 0 && ctx) {
+      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      const nextState = redoStack.pop();
+      if (nextState) {
+        ctx.putImageData(nextState, 0, 0);
         saveState();
       }
     }
