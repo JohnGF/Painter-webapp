@@ -43,12 +43,7 @@ import Layout from '../layouts/Layout.astro';
           <label for="color-picker">Color:</label>
           <input type="color" id="color-picker" value="#ff0000" />
           <div class="swatches" id="swatches">
-            <div class="swatch" style="background: #000000" data-color="#000000"></div>
-            <div class="swatch" style="background: #ffffff" data-color="#ffffff"></div>
-            <div class="swatch" style="background: #ff0000" data-color="#ff0000"></div>
-            <div class="swatch" style="background: #00ff00" data-color="#00ff00"></div>
-            <div class="swatch" style="background: #0000ff" data-color="#0000ff"></div>
-            <div class="swatch" style="background: #ffff00" data-color="#ffff00"></div>
+            <!-- Swatches will be dynamically rendered here -->
           </div>
         </div>
 
@@ -287,7 +282,7 @@ import Layout from '../layouts/Layout.astro';
 
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   const colorPicker = document.getElementById('color-picker') as HTMLInputElement;
-  const swatches = document.querySelectorAll('.swatch');
+  const swatchesContainer = document.getElementById('swatches') as HTMLDivElement;
   const brushSize = document.getElementById('brush-size') as HTMLInputElement;
   const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
@@ -572,14 +567,50 @@ import Layout from '../layouts/Layout.astro';
     }
   });
 
-  // Swatches
-  swatches.forEach(swatch => {
-    swatch.addEventListener('click', (e) => {
-      const color = (e.target as HTMLDivElement).dataset.color;
+  // Dynamic Swatches
+  const MAX_SWATCHES = 6;
+  let recentColors = ['#000000', '#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00'];
+
+  function renderSwatches() {
+    swatchesContainer.innerHTML = '';
+    recentColors.forEach(color => {
+      const swatch = document.createElement('div');
+      swatch.className = 'swatch';
+      swatch.style.background = color;
+      swatch.dataset.color = color;
+      swatchesContainer.appendChild(swatch);
+    });
+  }
+
+  function addRecentColor(color: string) {
+    // Remove if it already exists to move it to the front
+    recentColors = recentColors.filter(c => c !== color);
+    recentColors.unshift(color);
+    if (recentColors.length > MAX_SWATCHES) {
+      recentColors.pop();
+    }
+    renderSwatches();
+  }
+
+  // Initial render
+  renderSwatches();
+
+  // Handle color picker change
+  colorPicker.addEventListener('change', (e) => {
+    const color = (e.target as HTMLInputElement).value;
+    addRecentColor(color);
+  });
+
+  // Event delegation for swatches
+  swatchesContainer.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.classList.contains('swatch')) {
+      const color = target.dataset.color;
       if (color) {
         colorPicker.value = color;
+        addRecentColor(color);
       }
-    });
+    }
   });
 
   brushSize.addEventListener('input', () => {
@@ -1039,6 +1070,7 @@ import Layout from '../layouts/Layout.astro';
       if (pixel[3] > 0) { // If not fully transparent
         const hex = rgbToHex(pixel[0], pixel[1], pixel[2]);
         colorPicker.value = hex;
+        addRecentColor(hex);
       }
     }
   }
