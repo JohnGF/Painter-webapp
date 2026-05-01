@@ -372,22 +372,6 @@ import Layout from '../layouts/Layout.astro';
     }
   }
 
-  // Undo stack
-  const MAX_UNDO_STEPS = 20;
-  let undoStack: ImageData[] = [];
-  let redoStack: ImageData[] = [];
-
-  function saveUndoState(clearRedo: boolean = true) {
-    if (!ctx) return;
-    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-    if (undoStack.length > MAX_UNDO_STEPS) {
-      undoStack.shift(); // Remove oldest state
-    }
-    if (clearRedo) {
-      redoStack = []; // Clear redo stack on new actions
-    }
-  }
-
   // Default canvas size
   const defaultWidth = 800;
   const defaultHeight = 600;
@@ -513,16 +497,8 @@ import Layout from '../layouts/Layout.astro';
           bgCtx.drawImage(img, 0, 0, width, height);
         }
 
-        if (ctx) {
-          ctx.clearRect(0, 0, width, height);
-        }
-
-        // Clear undo stack when loading a new image to prevent dimension mismatches
         undoStack = [];
         redoStack = [];
-
-        // Save state after image upload
-        // Need to wait slightly for image to be drawn
         setTimeout(saveState, 50);
       };
       if (event.target?.result) {
@@ -572,35 +548,6 @@ import Layout from '../layouts/Layout.astro';
 
     targetLayer.ctx.putImageData(nextState.imageData, 0, 0);
     saveState();
-    if (ctx) {
-      saveUndoState();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      saveState();
-    }
-  });
-
-  // Handle undo button
-  undoBtn.addEventListener('click', () => {
-    if (undoStack.length > 0 && ctx) {
-      redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      const lastState = undoStack.pop();
-      if (lastState) {
-        ctx.putImageData(lastState, 0, 0);
-        saveState();
-      }
-    }
-  });
-
-  // Handle redo button
-  redoBtn.addEventListener('click', () => {
-    if (redoStack.length > 0 && ctx) {
-      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      const nextState = redoStack.pop();
-      if (nextState) {
-        ctx.putImageData(nextState, 0, 0);
-        saveState();
-      }
-    }
   });
 
   // Handle export button
@@ -609,7 +556,7 @@ import Layout from '../layouts/Layout.astro';
     exportCanvas.width = bgCanvas.width;
     exportCanvas.height = bgCanvas.height;
     const exportCtx = exportCanvas.getContext('2d');
-    
+
     if (exportCtx) {
       exportCtx.drawImage(bgCanvas, 0, 0);
       // Draw all layers in order
@@ -617,10 +564,6 @@ import Layout from '../layouts/Layout.astro';
         exportCtx.drawImage(layer.canvas, 0, 0);
       });
 
-      // Draw drawings on top
-      exportCtx.drawImage(canvas, 0, 0);
-      
-      // Trigger download
       const dataURL = exportCanvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = 'painting-export.png';
@@ -793,24 +736,24 @@ import Layout from '../layouts/Layout.astro';
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.globalAlpha = 0.4;
-      
+
       const distance = Math.sqrt(Math.pow(currentX - lastX, 2) + Math.pow(currentY - lastY, 2));
       const steps = Math.max(1, Math.floor(distance / 2));
-      
+
       for (let i = 0; i < steps; i++) {
         const t = i / steps;
         const x = lastX + (currentX - lastX) * t;
         const y = lastY + (currentY - lastY) * t;
-        
+
         ctx.beginPath();
         // Add random jitter for texture
         const jitterX = (Math.random() - 0.5) * size * 0.5;
         const jitterY = (Math.random() - 0.5) * size * 0.5;
-        
+
         ctx.moveTo(x + jitterX, y + jitterY);
         // Draw tiny lines for texture
         ctx.lineTo(x + jitterX + 1, y + jitterY + 1);
-        
+
         ctx.lineWidth = size * (0.8 + Math.random() * 0.4); // Vary thickness slightly
         ctx.stroke();
       }
@@ -857,11 +800,12 @@ import Layout from '../layouts/Layout.astro';
   }
 
   function drawPolygon(x1: number, y1: number, x2: number, y2: number, sides: number, size: number) {
+    const ctx = getActiveCtx();
     if (!ctx || sides < 3) return;
-    
+
     const radius = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
     const angle = Math.atan2(y2 - y1, x2 - x1);
-    
+
     ctx.beginPath();
     for (let i = 0; i <= sides; i++) {
       const curAngle = angle + (i * 2 * Math.PI / sides);
@@ -873,7 +817,7 @@ import Layout from '../layouts/Layout.astro';
         ctx.lineTo(px, py);
       }
     }
-    
+
     ctx.globalCompositeOperation = 'source-over';
     ctx.strokeStyle = colorPicker.value;
     ctx.lineWidth = size;
@@ -886,6 +830,7 @@ import Layout from '../layouts/Layout.astro';
   let sprayInterval: number | null = null;
 
   function spray(x: number, y: number, size: number) {
+    const ctx = getActiveCtx();
     if (!ctx) return;
 
     // Adjust density based on size
@@ -1029,7 +974,7 @@ import Layout from '../layouts/Layout.astro';
       clearInterval(sprayInterval);
       sprayInterval = null;
     }
-    
+
     // Save state after drawing ends
     saveState();
   }
