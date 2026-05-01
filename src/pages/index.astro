@@ -45,6 +45,7 @@ import Layout from '../layouts/Layout.astro';
           <div class="swatches" id="swatches">
             <!-- Swatches will be dynamically rendered here -->
           </div>
+          <button id="generate-palette-btn" class="tool-btn" style="padding: 4px 8px; font-size: 12px; margin-left: 10px;" title="Generate Complementary Palette">🎨 Auto-Palette</button>
         </div>
 
         <div class="control-item">
@@ -285,6 +286,7 @@ import Layout from '../layouts/Layout.astro';
   const swatchesContainer = document.getElementById('swatches') as HTMLDivElement;
   const brushSize = document.getElementById('brush-size') as HTMLInputElement;
   const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
+  const generatePaletteBtn = document.getElementById('generate-palette-btn') as HTMLButtonElement;
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
@@ -611,6 +613,25 @@ import Layout from '../layouts/Layout.astro';
         addRecentColor(color);
       }
     }
+  });
+
+  generatePaletteBtn.addEventListener('click', () => {
+    const baseColor = colorPicker.value;
+    const hsl = hexToHsl(baseColor);
+
+    // Generate a palette: Base, Analogous 1, Analogous 2, Triadic 1, Triadic 2, Complementary
+    const palette = [
+      baseColor,
+      hslToHex((hsl.h + 30) % 360, hsl.s, hsl.l),
+      hslToHex((hsl.h - 30 + 360) % 360, hsl.s, hsl.l),
+      hslToHex((hsl.h + 120) % 360, hsl.s, hsl.l),
+      hslToHex((hsl.h + 240) % 360, hsl.s, hsl.l),
+      hslToHex((hsl.h + 180) % 360, hsl.s, hsl.l),
+    ];
+
+    // Reverse so that baseColor ends up at the front (index 0) of recentColors after pushing
+    recentColors = palette.reverse();
+    renderSwatches();
   });
 
   brushSize.addEventListener('input', () => {
@@ -1104,6 +1125,36 @@ import Layout from '../layouts/Layout.astro';
 
   function rgbToHex(r: number, g: number, b: number) {
     return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1);
+  }
+
+  function hexToHsl(hex: string) {
+    let { r, g, b } = hexToRgb(hex);
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+    return { h: h * 360, s: s * 100, l: l * 100 };
+  }
+
+  function hslToHex(h: number, s: number, l: number) {
+    l /= 100;
+    const a = s * Math.min(l, 1 - l) / 100;
+    const f = (n: number) => {
+      const k = (n + h / 30) % 12;
+      const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+      return Math.round(255 * color).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
   }
 
   // Flood Fill Algorithm (BFS)
