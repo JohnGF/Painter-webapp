@@ -10,6 +10,10 @@ import Layout from '../layouts/Layout.astro';
       <div class="control-group">
         <label for="image-upload" class="file-label">Upload Image</label>
         <input type="file" id="image-upload" accept="image/*" />
+        <label style="margin-left: 15px; font-weight: bold; cursor: pointer;">
+          <input type="checkbox" id="paint-behind-toggle" />
+          Color Behind Lines (Line Art Mode)
+        </label>
       </div>
 
       <div class="drawing-controls">
@@ -76,6 +80,7 @@ import Layout from '../layouts/Layout.astro';
           <div id="layers-container">
             <canvas id="drawing-canvas" class="layer-canvas" data-layer-id="0"></canvas>
           </div>
+          <canvas id="line-art-canvas" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
         </div>
       </div>
 
@@ -277,6 +282,8 @@ import Layout from '../layouts/Layout.astro';
   // DOM Elements
   const bgCanvas = document.getElementById('bg-canvas') as HTMLCanvasElement;
   const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
+  const lineArtCanvas = document.getElementById('line-art-canvas') as HTMLCanvasElement;
+  const lineArtCtx = lineArtCanvas.getContext('2d', { willReadFrequently: true })!;
 
   const layersContainer = document.getElementById('layers-container') as HTMLDivElement;
   const layersList = document.getElementById('layers-list') as HTMLUListElement;
@@ -293,6 +300,7 @@ import Layout from '../layouts/Layout.astro';
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
+  const paintBehindToggle = document.getElementById('paint-behind-toggle') as HTMLInputElement;
 
   const polygonControls = document.getElementById('polygon-controls') as HTMLDivElement;
   const polygonSides = document.getElementById('polygon-sides') as HTMLInputElement;
@@ -379,6 +387,72 @@ import Layout from '../layouts/Layout.astro';
   bgCanvas.height = defaultHeight;
   initialCanvas.width = defaultWidth;
   initialCanvas.height = defaultHeight;
+
+  // State for Line Art Extraction
+  let originalBgImage: HTMLImageElement | null = null;
+
+  function extractLineArt(img: HTMLImageElement, width: number, height: number) {
+    // Draw image to a temporary canvas to get its pixel data
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = width;
+    tempCanvas.height = height;
+    const tempCtx = tempCanvas.getContext('2d')!;
+    tempCtx.drawImage(img, 0, 0, width, height);
+
+    const imageData = tempCtx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
+    // Convert luminance to alpha so white becomes transparent, black stays black
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+
+      // Calculate perceived luminance
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+
+      // Set to solid black
+      data[i] = 0;
+      data[i + 1] = 0;
+      data[i + 2] = 0;
+      // Alpha is inverse of luminance (white = 255 -> alpha = 0)
+      data[i + 3] = 255 - luminance;
+    }
+
+    lineArtCtx.putImageData(imageData, 0, 0);
+  }
+
+  function applyBackgroundMode() {
+    if (!originalBgImage) return;
+
+    const width = bgCanvas.width;
+    const height = bgCanvas.height;
+
+    // Clear both
+    bgCtx?.clearRect(0, 0, width, height);
+    lineArtCtx.clearRect(0, 0, width, height);
+
+    if (paintBehindToggle.checked) {
+      // Paint Behind Mode:
+      // Background is solid white
+      if (bgCtx) {
+        bgCtx.fillStyle = '#ffffff';
+        bgCtx.fillRect(0, 0, width, height);
+      }
+      // Line art goes on top
+      extractLineArt(originalBgImage, width, height);
+    } else {
+      // Normal Mode:
+      // Original image goes to background
+      bgCtx?.drawImage(originalBgImage, 0, 0, width, height);
+      // Line art is empty
+    }
+  }
+
+  paintBehindToggle.addEventListener('change', () => {
+    applyBackgroundMode();
+    saveState();
+  });
 
   // Fill background canvas with white initially
   if (bgCtx) {
@@ -485,16 +559,16 @@ import Layout from '../layouts/Layout.astro';
 
         bgCanvas.width = width;
         bgCanvas.height = height;
+        lineArtCanvas.width = width;
+        lineArtCanvas.height = height;
         layers.forEach(layer => {
           layer.canvas.width = width;
           layer.canvas.height = height;
           layer.ctx.clearRect(0, 0, width, height);
         });
 
-        if (bgCtx) {
-          bgCtx.clearRect(0, 0, width, height);
-          bgCtx.drawImage(img, 0, 0, width, height);
-        }
+        originalBgImage = img;
+        applyBackgroundMode();
 
         undoStack = [];
         redoStack = [];
@@ -562,6 +636,11 @@ import Layout from '../layouts/Layout.astro';
       layers.forEach(layer => {
         exportCtx.drawImage(layer.canvas, 0, 0);
       });
+
+      // Draw line art if active
+      if (paintBehindToggle.checked) {
+        exportCtx.drawImage(lineArtCanvas, 0, 0);
+      }
 
       const dataURL = exportCanvas.toDataURL('image/png');
       const link = document.createElement('a');
@@ -921,7 +1000,19 @@ import Layout from '../layouts/Layout.astro';
 
   function saveState() {
     try {
-      localStorage.setItem('painter-bg', bgCanvas.toDataURL());
+      if (originalBgImage) {
+        // Create an offscreen canvas to get the data URL of original image
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = originalBgImage.width;
+        tempCanvas.height = originalBgImage.height;
+        tempCanvas.getContext('2d')!.drawImage(originalBgImage, 0, 0);
+        localStorage.setItem('painter-original-bg', tempCanvas.toDataURL());
+      } else {
+        localStorage.setItem('painter-bg', bgCanvas.toDataURL());
+        localStorage.removeItem('painter-original-bg');
+      }
+
+      localStorage.setItem('painter-paint-behind', paintBehindToggle.checked ? 'true' : 'false');
 
       // Save all layers
       const layersData = layers.map(l => ({
@@ -941,23 +1032,38 @@ import Layout from '../layouts/Layout.astro';
   function loadState() {
     try {
       const bgData = localStorage.getItem('painter-bg');
+      const originalBgData = localStorage.getItem('painter-original-bg');
+      const paintBehind = localStorage.getItem('painter-paint-behind') === 'true';
       const layersDataStr = localStorage.getItem('painter-layers');
       const w = localStorage.getItem('painter-width');
       const h = localStorage.getItem('painter-height');
 
-      if (bgData && layersDataStr && w && h) {
+      if (layersDataStr && w && h) {
         const width = parseInt(w, 10);
         const height = parseInt(h, 10);
 
         bgCanvas.width = width;
         bgCanvas.height = height;
+        lineArtCanvas.width = width;
+        lineArtCanvas.height = height;
 
-        const bgImg = new Image();
-        bgImg.onload = () => {
-          bgCtx?.clearRect(0, 0, width, height);
-          bgCtx?.drawImage(bgImg, 0, 0);
-        };
-        bgImg.src = bgData;
+        paintBehindToggle.checked = paintBehind;
+
+        if (originalBgData) {
+          const img = new Image();
+          img.onload = () => {
+            originalBgImage = img;
+            applyBackgroundMode();
+          };
+          img.src = originalBgData;
+        } else if (bgData) {
+          const bgImg = new Image();
+          bgImg.onload = () => {
+            bgCtx?.clearRect(0, 0, width, height);
+            bgCtx?.drawImage(bgImg, 0, 0);
+          };
+          bgImg.src = bgData;
+        }
 
         const layersData = JSON.parse(layersDataStr);
 
