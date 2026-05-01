@@ -14,16 +14,42 @@ import Layout from '../layouts/Layout.astro';
 
       <div class="drawing-controls">
         <div class="control-item tool-selector">
-          <button id="tool-brush" class="tool-btn active">Brush</button>
-          <button id="tool-eraser" class="tool-btn">Eraser</button>
-          <button id="tool-sprayer" class="tool-btn">Sprayer</button>
-          <button id="tool-crayon" class="tool-btn">Crayon</button>
-          <button id="tool-polygon" class="tool-btn">Polygon</button>
+          <button id="tool-brush" class="tool-btn active" title="Brush">🖌️</button>
+          <button id="tool-pencil" class="tool-btn" title="Pencil">✏️</button>
+          <button id="tool-highlighter" class="tool-btn" title="Highlighter">🖍️</button>
+          <button id="tool-crayon" class="tool-btn" title="Crayon">🖍️</button>
+          <button id="tool-sprayer" class="tool-btn" title="Sprayer">💨</button>
+          <button id="tool-eraser" class="tool-btn" title="Eraser">🧹</button>
+          <button id="tool-fill" class="tool-btn" title="Paint Bucket">🪣</button>
+          <button id="tool-eyedropper" class="tool-btn" title="Eyedropper">💧</button>
+          <button id="tool-line" class="tool-btn" title="Line">➖</button>
+          <button id="tool-rect" class="tool-btn" title="Rectangle">⬜</button>
+          <button id="tool-circle" class="tool-btn" title="Circle">⭕</button>
+          <button id="tool-polygon" class="tool-btn" title="Polygon">⬠</button>
+          <button id="tool-text" class="tool-btn" title="Text">T</button>
+          <button id="tool-pan" class="tool-btn" title="Pan">✋</button>
+        </div>
+
+        <div class="control-item" id="text-controls" style="display: none;">
+          <input type="text" id="text-input" placeholder="Type text here..." />
+        </div>
+
+        <div class="control-item" id="polygon-controls" style="display: none;">
+          <label for="polygon-sides">Sides:</label>
+          <input type="number" id="polygon-sides" min="3" max="20" value="5" style="width: 40px;" />
         </div>
 
         <div class="control-item">
           <label for="color-picker">Color:</label>
           <input type="color" id="color-picker" value="#ff0000" />
+          <div class="swatches" id="swatches">
+            <div class="swatch" style="background: #000000" data-color="#000000"></div>
+            <div class="swatch" style="background: #ffffff" data-color="#ffffff"></div>
+            <div class="swatch" style="background: #ff0000" data-color="#ff0000"></div>
+            <div class="swatch" style="background: #00ff00" data-color="#00ff00"></div>
+            <div class="swatch" style="background: #0000ff" data-color="#0000ff"></div>
+            <div class="swatch" style="background: #ffff00" data-color="#ffff00"></div>
+          </div>
         </div>
 
         <div class="control-item">
@@ -32,21 +58,38 @@ import Layout from '../layouts/Layout.astro';
           <span id="brush-size-display">5</span>
         </div>
 
-        <div class="control-item" id="polygon-controls" style="display: none;">
-          <label for="polygon-sides">Sides:</label>
-          <input type="number" id="polygon-sides" min="3" max="20" value="5" style="width: 40px;" />
+        <div class="control-item zoom-controls">
+          <button id="zoom-out-btn" title="Zoom Out">-</button>
+          <span id="zoom-display">100%</span>
+          <button id="zoom-in-btn" title="Zoom In">+</button>
         </div>
 
-        <button id="undo-btn" style="background-color: #f39c12;">Undo</button>
-        <button id="redo-btn" style="background-color: #f39c12;">Redo</button>
-        <button id="clear-btn">Clear Drawing</button>
-        <button id="export-btn" style="background-color: #2ed573;">Export Image</button>
+        <div class="control-item action-buttons">
+          <button id="undo-btn" style="background-color: #f39c12;">Undo</button>
+          <button id="redo-btn" style="background-color: #f39c12;">Redo</button>
+          <button id="clear-btn">Clear Layer</button>
+          <button id="export-btn" style="background-color: #2ed573;">Export</button>
+        </div>
       </div>
     </div>
 
-    <div class="canvas-container" id="canvas-wrapper">
-      <canvas id="bg-canvas"></canvas>
-      <canvas id="drawing-canvas"></canvas>
+    <div class="workspace">
+      <div class="canvas-container" id="canvas-wrapper">
+        <div id="zoom-wrapper" style="transform-origin: 0 0; position: relative;">
+          <canvas id="bg-canvas"></canvas>
+          <div id="layers-container">
+            <canvas id="drawing-canvas" class="layer-canvas" data-layer-id="0"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="layers-panel">
+        <h3>Layers</h3>
+        <ul id="layers-list">
+          <li class="layer-item active" data-layer-id="0">Layer 1</li>
+        </ul>
+        <button id="add-layer-btn">Add Layer</button>
+      </div>
     </div>
   </main>
 </Layout>
@@ -88,15 +131,22 @@ import Layout from '../layouts/Layout.astro';
     gap: 8px;
   }
 
+  .workspace {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
   .canvas-container {
+    flex: 1;
     position: relative;
     display: flex;
     justify-content: center;
     align-items: flex-start;
     border: 2px dashed #ccc;
     border-radius: 8px;
-    background-color: #fff;
-    min-height: 400px;
+    background-color: #e5e5e5;
+    min-height: 500px;
     overflow: auto; /* Allow scrolling if canvas is larger than container */
     padding: 10px;
   }
@@ -108,16 +158,83 @@ import Layout from '../layouts/Layout.astro';
     display: block;
   }
 
-  #bg-canvas {
+  #zoom-wrapper {
     position: relative;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    background: #fff;
   }
 
-  #drawing-canvas {
+  #bg-canvas {
+    position: relative;
+  }
+
+  #layers-container {
     position: absolute;
-    top: 10px; /* match padding of container */
-    left: 50%;
-    transform: translateX(-50%);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Let events pass to the currently active canvas */
+  }
+
+  .layer-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: auto; /* Re-enable events on canvases */
+  }
+
+  .layers-panel {
+    width: 200px;
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+  }
+
+  .layers-panel h3 {
+    margin-top: 0;
+  }
+
+  #layers-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 15px 0;
+  }
+
+  .layer-item {
+    padding: 8px;
+    background: #fff;
+    border: 1px solid #ccc;
+    margin-bottom: 5px;
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .layer-item.active {
+    background: #e0f7fa;
+    border-color: #00bcd4;
+    font-weight: bold;
+  }
+
+  .swatches {
+    display: flex;
+    gap: 4px;
+    margin-left: 10px;
+  }
+
+  .swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    cursor: pointer;
+  }
+
+  .swatch:hover {
+    border-color: #333;
   }
 
   .tool-selector {
@@ -159,45 +276,99 @@ import Layout from '../layouts/Layout.astro';
 </style>
 
 <script>
+  // DOM Elements
   const bgCanvas = document.getElementById('bg-canvas') as HTMLCanvasElement;
-  const bgCtx = bgCanvas.getContext('2d');
+  const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
 
-  const canvas = document.getElementById('drawing-canvas') as HTMLCanvasElement;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const layersContainer = document.getElementById('layers-container') as HTMLDivElement;
+  const layersList = document.getElementById('layers-list') as HTMLUListElement;
+  const addLayerBtn = document.getElementById('add-layer-btn') as HTMLButtonElement;
+  const zoomWrapper = document.getElementById('zoom-wrapper') as HTMLDivElement;
 
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   const colorPicker = document.getElementById('color-picker') as HTMLInputElement;
+  const swatches = document.querySelectorAll('.swatch');
   const brushSize = document.getElementById('brush-size') as HTMLInputElement;
   const brushSizeDisplay = document.getElementById('brush-size-display') as HTMLSpanElement;
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
+
   const polygonControls = document.getElementById('polygon-controls') as HTMLDivElement;
   const polygonSides = document.getElementById('polygon-sides') as HTMLInputElement;
+  const textControls = document.getElementById('text-controls') as HTMLDivElement;
+  const textInput = document.getElementById('text-input') as HTMLInputElement;
+  const zoomInBtn = document.getElementById('zoom-in-btn') as HTMLButtonElement;
+  const zoomOutBtn = document.getElementById('zoom-out-btn') as HTMLButtonElement;
+  const zoomDisplay = document.getElementById('zoom-display') as HTMLSpanElement;
 
-  // Tool buttons
-  const btnBrush = document.getElementById('tool-brush') as HTMLButtonElement;
-  const btnEraser = document.getElementById('tool-eraser') as HTMLButtonElement;
-  const btnSprayer = document.getElementById('tool-sprayer') as HTMLButtonElement;
-  const btnCrayon = document.getElementById('tool-crayon') as HTMLButtonElement;
-  const btnPolygon = document.getElementById('tool-polygon') as HTMLButtonElement;
+  // Tools mapping
+  const tools = [
+    'brush', 'pencil', 'highlighter', 'crayon', 'sprayer', 'eraser',
+    'fill', 'eyedropper', 'line', 'rect', 'circle', 'polygon', 'text', 'pan'
+  ] as const;
+  type ToolType = typeof tools[number];
 
-  let currentTool: 'brush' | 'eraser' | 'sprayer' | 'crayon' | 'polygon' = 'brush';
+  const toolBtns: Record<string, HTMLButtonElement> = {};
+  tools.forEach(t => {
+    toolBtns[t] = document.getElementById(`tool-${t}`) as HTMLButtonElement;
+  });
 
-  // Undo stack
+  let currentTool: ToolType = 'brush';
+
+  // Layer State
+  let nextLayerId = 1;
+  let activeLayerId = 0;
+  interface Layer {
+    id: number;
+    canvas: HTMLCanvasElement;
+    ctx: CanvasRenderingContext2D;
+    name: string;
+  }
+  let layers: Layer[] = [];
+
+  // Initialize first layer
+  const initialCanvas = document.getElementById('drawing-canvas') as HTMLCanvasElement;
+  const initialCtx = initialCanvas.getContext('2d', { willReadFrequently: true })!;
+  layers.push({ id: 0, canvas: initialCanvas, ctx: initialCtx, name: 'Layer 1' });
+
+  function getActiveCanvas() {
+    return layers.find(l => l.id === activeLayerId)!.canvas;
+  }
+  function getActiveCtx() {
+    return layers.find(l => l.id === activeLayerId)!.ctx;
+  }
+
+  // Zoom and Pan State
+  let zoomLevel = 1.0;
+  let isPanning = false;
+  let panStartX = 0;
+  let panStartY = 0;
+  let panOffsetX = 0;
+  let panOffsetY = 0;
+
+  // Undo stack (per layer)
   const MAX_UNDO_STEPS = 20;
-  let undoStack: ImageData[] = [];
-  let redoStack: ImageData[] = [];
+  interface HistoryState {
+    layerId: number;
+    imageData: ImageData;
+  }
+  let undoStack: HistoryState[] = [];
+  let redoStack: HistoryState[] = [];
 
   function saveUndoState(clearRedo: boolean = true) {
-    if (!ctx) return;
-    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    const ctx = getActiveCtx();
+    const canvas = getActiveCanvas();
+    undoStack.push({
+      layerId: activeLayerId,
+      imageData: ctx.getImageData(0, 0, canvas.width, canvas.height)
+    });
     if (undoStack.length > MAX_UNDO_STEPS) {
-      undoStack.shift(); // Remove oldest state
+      undoStack.shift();
     }
     if (clearRedo) {
-      redoStack = []; // Clear redo stack on new actions
+      redoStack = [];
     }
   }
 
@@ -207,14 +378,87 @@ import Layout from '../layouts/Layout.astro';
 
   bgCanvas.width = defaultWidth;
   bgCanvas.height = defaultHeight;
-  canvas.width = defaultWidth;
-  canvas.height = defaultHeight;
+  initialCanvas.width = defaultWidth;
+  initialCanvas.height = defaultHeight;
 
   // Fill background canvas with white initially
   if (bgCtx) {
     bgCtx.fillStyle = '#ffffff';
     bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
   }
+
+  // Layers Logic
+  function renderLayersList() {
+    layersList.innerHTML = '';
+    layers.forEach(layer => {
+      const li = document.createElement('li');
+      li.className = `layer-item ${layer.id === activeLayerId ? 'active' : ''}`;
+      li.textContent = layer.name;
+
+      const deleteBtn = document.createElement('span');
+      deleteBtn.textContent = '✖';
+      deleteBtn.style.color = '#ff4757';
+      deleteBtn.style.marginLeft = '10px';
+      if (layers.length > 1) {
+        deleteBtn.onclick = (e) => {
+          e.stopPropagation();
+          deleteLayer(layer.id);
+        };
+        li.appendChild(deleteBtn);
+      }
+
+      li.onclick = () => setActiveLayer(layer.id);
+      layersList.appendChild(li);
+    });
+  }
+
+  function setActiveLayer(id: number) {
+    activeLayerId = id;
+    renderLayersList();
+  }
+
+  function addLayer() {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'layer-canvas';
+    canvas.width = bgCanvas.width;
+    canvas.height = bgCanvas.height;
+    // Bind global pointer events to the new canvas
+    bindCanvasEvents(canvas);
+
+    layersContainer.appendChild(canvas);
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+    const newLayer = { id: nextLayerId++, canvas, ctx, name: `Layer ${nextLayerId}` };
+    layers.push(newLayer);
+
+    setActiveLayer(newLayer.id);
+    saveState();
+  }
+
+  function deleteLayer(id: number) {
+    if (layers.length <= 1) return;
+    const layerIndex = layers.findIndex(l => l.id === id);
+    const layer = layers[layerIndex];
+    layer.canvas.remove();
+    layers.splice(layerIndex, 1);
+
+    if (activeLayerId === id) {
+      activeLayerId = layers[0].id;
+    }
+    renderLayersList();
+    saveState();
+  }
+
+  addLayerBtn.addEventListener('click', addLayer);
+
+  // Apply Transform for Zoom/Pan
+  function updateTransform() {
+    zoomWrapper.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px) scale(${zoomLevel})`;
+    zoomDisplay.textContent = `${Math.round(zoomLevel * 100)}%`;
+  }
+
+  zoomInBtn.addEventListener('click', () => { zoomLevel = Math.min(zoomLevel + 0.1, 3); updateTransform(); });
+  zoomOutBtn.addEventListener('click', () => { zoomLevel = Math.max(zoomLevel - 0.1, 0.5); updateTransform(); });
 
   // Handle image upload
   imageUpload.addEventListener('change', (e) => {
@@ -225,10 +469,6 @@ import Layout from '../layouts/Layout.astro';
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // Resize canvas to fit image, or scale image to fit canvas?
-        // Let's set canvas size to match image for better fidelity
-
-        // Let's cap max size to prevent memory issues, but keep aspect ratio
         const MAX_WIDTH = 1000;
         const MAX_HEIGHT = 800;
 
@@ -239,7 +479,6 @@ import Layout from '../layouts/Layout.astro';
           height = Math.round((height * MAX_WIDTH) / width);
           width = MAX_WIDTH;
         }
-
         if (height > MAX_HEIGHT) {
           width = Math.round((width * MAX_HEIGHT) / height);
           height = MAX_HEIGHT;
@@ -247,28 +486,21 @@ import Layout from '../layouts/Layout.astro';
 
         bgCanvas.width = width;
         bgCanvas.height = height;
-        canvas.width = width;
-        canvas.height = height;
+        layers.forEach(layer => {
+          layer.canvas.width = width;
+          layer.canvas.height = height;
+          layer.ctx.clearRect(0, 0, width, height);
+        });
 
         if (bgCtx) {
-          // Clear any previous image/background
           bgCtx.clearRect(0, 0, width, height);
           bgCtx.drawImage(img, 0, 0, width, height);
         }
 
-        if (ctx) {
-          ctx.clearRect(0, 0, width, height);
-        }
-
-        // Clear undo stack when loading a new image to prevent dimension mismatches
         undoStack = [];
         redoStack = [];
-
-        // Save state after image upload
-        // Need to wait slightly for image to be drawn
         setTimeout(saveState, 50);
       };
-
       if (event.target?.result) {
         img.src = event.target.result as string;
       }
@@ -276,54 +508,62 @@ import Layout from '../layouts/Layout.astro';
     reader.readAsDataURL(file);
   });
 
-  // Handle clear button - clears ONLY the drawing layer
+  // Clear Active Layer
   clearBtn.addEventListener('click', () => {
-    if (ctx) {
-      saveUndoState();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      saveState();
-    }
+    saveUndoState();
+    const canvas = getActiveCanvas();
+    const ctx = getActiveCtx();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    saveState();
   });
 
-  // Handle undo button
+  // Handle undo/redo
   undoBtn.addEventListener('click', () => {
-    if (undoStack.length > 0 && ctx) {
-      redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      const lastState = undoStack.pop();
-      if (lastState) {
-        ctx.putImageData(lastState, 0, 0);
-        saveState();
-      }
-    }
+    if (undoStack.length === 0) return;
+    const lastState = undoStack.pop()!;
+    const targetLayer = layers.find(l => l.id === lastState.layerId);
+    if (!targetLayer) return;
+
+    // Save current before undoing
+    redoStack.push({
+      layerId: targetLayer.id,
+      imageData: targetLayer.ctx.getImageData(0, 0, targetLayer.canvas.width, targetLayer.canvas.height)
+    });
+
+    targetLayer.ctx.putImageData(lastState.imageData, 0, 0);
+    saveState();
   });
 
-  // Handle redo button
   redoBtn.addEventListener('click', () => {
-    if (redoStack.length > 0 && ctx) {
-      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      const nextState = redoStack.pop();
-      if (nextState) {
-        ctx.putImageData(nextState, 0, 0);
-        saveState();
-      }
-    }
+    if (redoStack.length === 0) return;
+    const nextState = redoStack.pop()!;
+    const targetLayer = layers.find(l => l.id === nextState.layerId);
+    if (!targetLayer) return;
+
+    // Save current before redoing
+    undoStack.push({
+      layerId: targetLayer.id,
+      imageData: targetLayer.ctx.getImageData(0, 0, targetLayer.canvas.width, targetLayer.canvas.height)
+    });
+
+    targetLayer.ctx.putImageData(nextState.imageData, 0, 0);
+    saveState();
   });
 
   // Handle export button
   exportBtn.addEventListener('click', () => {
-    // Create a temporary canvas to merge both layers
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = bgCanvas.width;
     exportCanvas.height = bgCanvas.height;
     const exportCtx = exportCanvas.getContext('2d');
 
     if (exportCtx) {
-      // Draw background
       exportCtx.drawImage(bgCanvas, 0, 0);
-      // Draw drawings on top
-      exportCtx.drawImage(canvas, 0, 0);
+      // Draw all layers in order
+      layers.forEach(layer => {
+        exportCtx.drawImage(layer.canvas, 0, 0);
+      });
 
-      // Trigger download
       const dataURL = exportCanvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = 'painting-export.png';
@@ -332,39 +572,46 @@ import Layout from '../layouts/Layout.astro';
     }
   });
 
-  // Update brush size display
+  // Swatches
+  swatches.forEach(swatch => {
+    swatch.addEventListener('click', (e) => {
+      const color = (e.target as HTMLDivElement).dataset.color;
+      if (color) {
+        colorPicker.value = color;
+      }
+    });
+  });
+
   brushSize.addEventListener('input', () => {
     brushSizeDisplay.textContent = brushSize.value;
   });
 
   // Handle tool selection
-  function setActiveTool(tool: 'brush' | 'eraser' | 'sprayer' | 'crayon' | 'polygon', btn: HTMLButtonElement) {
+  function setActiveTool(tool: ToolType) {
     currentTool = tool;
 
-    // Update UI
-    [btnBrush, btnEraser, btnSprayer, btnCrayon, btnPolygon].forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
+    Object.values(toolBtns).forEach(b => b.classList.remove('active'));
+    toolBtns[tool].classList.add('active');
 
-    // Show/hide polygon controls
-    if (tool === 'polygon') {
-      polygonControls.style.display = 'flex';
-    } else {
-      polygonControls.style.display = 'none';
-    }
+    polygonControls.style.display = tool === 'polygon' ? 'flex' : 'none';
+    textControls.style.display = tool === 'text' ? 'flex' : 'none';
 
     // Update cursor depending on tool
-    if (tool === 'eraser') {
-      canvas.style.cursor = 'cell';
-    } else {
-      canvas.style.cursor = 'crosshair';
-    }
+    const canvases = document.querySelectorAll('.layer-canvas');
+    canvases.forEach(c => {
+      const el = c as HTMLElement;
+      if (tool === 'eraser') el.style.cursor = 'cell';
+      else if (tool === 'pan') el.style.cursor = 'grab';
+      else if (tool === 'eyedropper') el.style.cursor = 'alias';
+      else if (tool === 'text') el.style.cursor = 'text';
+      else if (tool === 'fill') el.style.cursor = 'crosshair';
+      else el.style.cursor = 'crosshair';
+    });
   }
 
-  btnBrush.addEventListener('click', () => setActiveTool('brush', btnBrush));
-  btnEraser.addEventListener('click', () => setActiveTool('eraser', btnEraser));
-  btnSprayer.addEventListener('click', () => setActiveTool('sprayer', btnSprayer));
-  btnCrayon.addEventListener('click', () => setActiveTool('crayon', btnCrayon));
-  btnPolygon.addEventListener('click', () => setActiveTool('polygon', btnPolygon));
+  tools.forEach(t => {
+    toolBtns[t].addEventListener('click', () => setActiveTool(t));
+  });
 
   // Drawing state
   let isDrawing = false;
@@ -375,68 +622,112 @@ import Layout from '../layouts/Layout.astro';
   let snapshot: ImageData | null = null;
 
   function startDrawing(e: PointerEvent) {
+    // If it's the Pan tool, handle panning separately
+    if (currentTool === 'pan') {
+      isPanning = true;
+      panStartX = e.clientX - panOffsetX;
+      panStartY = e.clientY - panOffsetY;
+      return;
+    }
+
+    // Text tool is click-based
+    if (currentTool === 'text') {
+      return;
+    }
+
+    // Fill tool is click-based
+    if (currentTool === 'fill') {
+      return;
+    }
+
+    // Eyedropper tool is click-based
+    if (currentTool === 'eyedropper') {
+      return;
+    }
+
     isDrawing = true;
 
     // Save the undo state before we modify the canvas
     saveUndoState();
 
-    // Get correct coordinates relative to the canvas
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const canvas = getActiveCanvas();
+    const ctx = getActiveCtx();
 
-    lastX = (e.clientX - rect.left) * scaleX;
-    lastY = (e.clientY - rect.top) * scaleY;
+    // Get correct coordinates relative to the zoomed/panned canvas
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / (rect.width / zoomLevel);
+    const scaleY = canvas.height / (rect.height / zoomLevel);
+
+    lastX = (e.clientX - rect.left) * scaleX / zoomLevel;
+    lastY = (e.clientY - rect.top) * scaleY / zoomLevel;
     startX = lastX;
     startY = lastY;
 
-    if (ctx) {
-      snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    }
+    snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
     if (currentTool === 'sprayer') {
       startSpraying();
-    } else if (currentTool !== 'polygon') {
-      // Support drawing single dots on tap/click for brush/eraser/crayon
+    } else if (!['polygon', 'line', 'rect', 'circle'].includes(currentTool)) {
       draw(e);
     }
   }
 
   function draw(e: PointerEvent) {
-    if (!isDrawing || !ctx) return;
+    if (isPanning) {
+      panOffsetX = e.clientX - panStartX;
+      panOffsetY = e.clientY - panStartY;
+      updateTransform();
+      return;
+    }
+
+    if (!isDrawing) return;
+
+    const canvas = getActiveCanvas();
+    const ctx = getActiveCtx();
 
     // Prevent default to avoid scrolling on touch devices
     e.preventDefault();
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const scaleX = canvas.width / (rect.width / zoomLevel);
+    const scaleY = canvas.height / (rect.height / zoomLevel);
 
-    const currentX = (e.clientX - rect.left) * scaleX;
-    const currentY = (e.clientY - rect.top) * scaleY;
+    const currentX = (e.clientX - rect.left) * scaleX / zoomLevel;
+    const currentY = (e.clientY - rect.top) * scaleY / zoomLevel;
 
     const size = parseInt(brushSize.value, 10);
 
-    if (currentTool === 'brush' || currentTool === 'eraser') {
+    if (currentTool === 'brush' || currentTool === 'pencil' || currentTool === 'highlighter' || currentTool === 'eraser') {
       ctx.beginPath();
       ctx.moveTo(lastX, lastY);
       ctx.lineTo(currentX, currentY);
 
       if (currentTool === 'eraser') {
         ctx.globalCompositeOperation = 'destination-out';
-        ctx.lineWidth = size; // Usually want eraser to be a bit thicker, or just use the slider
-        ctx.strokeStyle = 'rgba(0,0,0,1)'; // Color doesn't matter for destination-out
+        ctx.lineWidth = size;
+        ctx.strokeStyle = 'rgba(0,0,0,1)';
+      } else if (currentTool === 'highlighter') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = colorPicker.value;
+        ctx.lineWidth = size * 2; // Make highlighter broader
+        ctx.globalAlpha = 0.05; // Very transparent so multiple strokes build up
+      } else if (currentTool === 'pencil') {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = colorPicker.value;
+        ctx.lineWidth = Math.max(1, size / 3); // Thin line
+        ctx.globalAlpha = 0.8;
       } else {
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = colorPicker.value;
         ctx.lineWidth = size;
+        ctx.globalAlpha = 1.0;
       }
 
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.stroke();
 
-      // Reset composite operation so it doesn't affect other drawings
+      ctx.globalAlpha = 1.0;
       ctx.globalCompositeOperation = 'source-over';
     } else if (currentTool === 'crayon') {
       // Crayon effect using jitter and low opacity
@@ -467,19 +758,42 @@ import Layout from '../layouts/Layout.astro';
         ctx.stroke();
       }
       ctx.globalAlpha = 1.0; // Reset alpha
-    } else if (currentTool === 'polygon') {
+    } else if (currentTool === 'polygon' || currentTool === 'line' || currentTool === 'rect' || currentTool === 'circle') {
       if (snapshot) {
         ctx.putImageData(snapshot, 0, 0);
       }
-      const sides = parseInt(polygonSides.value, 10) || 5;
-      drawPolygon(startX, startY, currentX, currentY, sides, size);
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = size;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (currentTool === 'polygon') {
+        const sides = parseInt(polygonSides.value, 10) || 5;
+        drawPolygon(startX, startY, currentX, currentY, sides, size);
+      } else if (currentTool === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(currentX, currentY);
+        ctx.stroke();
+      } else if (currentTool === 'rect') {
+        ctx.beginPath();
+        ctx.rect(startX, startY, currentX - startX, currentY - startY);
+        ctx.stroke();
+      } else if (currentTool === 'circle') {
+        const radius = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
+        ctx.beginPath();
+        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
     } else if (currentTool === 'sprayer') {
       // Sprayer is handled differently, often with an interval,
       // but we can also spray immediately on move
       spray(currentX, currentY, size);
     }
 
-    if (currentTool !== 'polygon') {
+    if (!['polygon', 'line', 'rect', 'circle'].includes(currentTool)) {
       lastX = currentX;
       lastY = currentY;
     }
@@ -552,9 +866,17 @@ import Layout from '../layouts/Layout.astro';
   function saveState() {
     try {
       localStorage.setItem('painter-bg', bgCanvas.toDataURL());
-      localStorage.setItem('painter-drawing', canvas.toDataURL());
-      localStorage.setItem('painter-width', canvas.width.toString());
-      localStorage.setItem('painter-height', canvas.height.toString());
+
+      // Save all layers
+      const layersData = layers.map(l => ({
+        id: l.id,
+        name: l.name,
+        data: l.canvas.toDataURL()
+      }));
+      localStorage.setItem('painter-layers', JSON.stringify(layersData));
+
+      localStorage.setItem('painter-width', bgCanvas.width.toString());
+      localStorage.setItem('painter-height', bgCanvas.height.toString());
     } catch (e) {
       console.error('Failed to save to localStorage', e);
     }
@@ -563,18 +885,16 @@ import Layout from '../layouts/Layout.astro';
   function loadState() {
     try {
       const bgData = localStorage.getItem('painter-bg');
-      const drawingData = localStorage.getItem('painter-drawing');
+      const layersDataStr = localStorage.getItem('painter-layers');
       const w = localStorage.getItem('painter-width');
       const h = localStorage.getItem('painter-height');
 
-      if (bgData && drawingData && w && h) {
+      if (bgData && layersDataStr && w && h) {
         const width = parseInt(w, 10);
         const height = parseInt(h, 10);
 
         bgCanvas.width = width;
         bgCanvas.height = height;
-        canvas.width = width;
-        canvas.height = height;
 
         const bgImg = new Image();
         bgImg.onload = () => {
@@ -583,12 +903,50 @@ import Layout from '../layouts/Layout.astro';
         };
         bgImg.src = bgData;
 
-        const drawImg = new Image();
-        drawImg.onload = () => {
-          ctx?.clearRect(0, 0, width, height);
-          ctx?.drawImage(drawImg, 0, 0);
-        };
-        drawImg.src = drawingData;
+        const layersData = JSON.parse(layersDataStr);
+
+        // Clear existing layers except the first one
+        while (layers.length > 1) {
+          deleteLayer(layers[1].id);
+        }
+
+        if (layersData.length > 0) {
+          // Update first layer
+          layers[0].canvas.width = width;
+          layers[0].canvas.height = height;
+          layers[0].name = layersData[0].name;
+          const img0 = new Image();
+          img0.onload = () => {
+            layers[0].ctx.clearRect(0, 0, width, height);
+            layers[0].ctx.drawImage(img0, 0, 0);
+          };
+          img0.src = layersData[0].data;
+
+          // Add remaining layers
+          for (let i = 1; i < layersData.length; i++) {
+            const data = layersData[i];
+
+            const canvas = document.createElement('canvas');
+            canvas.className = 'layer-canvas';
+            canvas.width = width;
+            canvas.height = height;
+            bindCanvasEvents(canvas);
+            layersContainer.appendChild(canvas);
+
+            const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+            const newLayer = { id: nextLayerId++, canvas, ctx, name: data.name };
+            layers.push(newLayer);
+
+            const img = new Image();
+            img.onload = () => {
+              ctx.clearRect(0, 0, width, height);
+              ctx.drawImage(img, 0, 0);
+            };
+            img.src = data.data;
+          }
+        }
+
+        setActiveLayer(layers[0].id);
       }
     } catch (e) {
       console.error('Failed to load from localStorage', e);
@@ -599,11 +957,17 @@ import Layout from '../layouts/Layout.astro';
   loadState();
 
   function stopDrawing() {
+    if (isPanning) {
+      isPanning = false;
+      return;
+    }
+
     if (!isDrawing) return;
     isDrawing = false;
-    if (ctx) {
-      ctx.beginPath(); // Reset path to prevent connecting unexpected lines
-    }
+
+    const ctx = getActiveCtx();
+    ctx.beginPath(); // Reset path to prevent connecting unexpected lines
+
     if (sprayInterval !== null) {
       clearInterval(sprayInterval);
       sprayInterval = null;
@@ -613,14 +977,173 @@ import Layout from '../layouts/Layout.astro';
     saveState();
   }
 
-  // Pointer events (works for mouse, touch, and stylus)
-  canvas.addEventListener('pointerdown', startDrawing);
-  canvas.addEventListener('pointermove', draw);
-  canvas.addEventListener('pointerup', stopDrawing);
-  canvas.addEventListener('pointerout', stopDrawing);
-  canvas.addEventListener('pointercancel', stopDrawing);
+  function handleCanvasClick(e: MouseEvent) {
+    if (currentTool === 'text') {
+      const text = textInput.value;
+      if (!text) return;
 
-  // Prevent default touch behaviors on the canvas to stop scrolling
-  canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
-  canvas.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+      saveUndoState();
+
+      const canvas = getActiveCanvas();
+      const ctx = getActiveCtx();
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / (rect.width / zoomLevel);
+      const scaleY = canvas.height / (rect.height / zoomLevel);
+
+      const x = (e.clientX - rect.left) * scaleX / zoomLevel;
+      const y = (e.clientY - rect.top) * scaleY / zoomLevel;
+
+      const size = parseInt(brushSize.value, 10);
+      ctx.font = `${size * 5}px sans-serif`;
+      ctx.fillStyle = colorPicker.value;
+      ctx.fillText(text, x, y);
+
+      saveState();
+    } else if (currentTool === 'fill') {
+      saveUndoState();
+      const canvas = getActiveCanvas();
+      const ctx = getActiveCtx();
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / (rect.width / zoomLevel);
+      const scaleY = canvas.height / (rect.height / zoomLevel);
+
+      const x = Math.floor((e.clientX - rect.left) * scaleX / zoomLevel);
+      const y = Math.floor((e.clientY - rect.top) * scaleY / zoomLevel);
+
+      floodFill(canvas, ctx, x, y, hexToRgb(colorPicker.value));
+      saveState();
+    } else if (currentTool === 'eyedropper') {
+      const canvas = getActiveCanvas();
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / (rect.width / zoomLevel);
+      const scaleY = canvas.height / (rect.height / zoomLevel);
+
+      const x = Math.floor((e.clientX - rect.left) * scaleX / zoomLevel);
+      const y = Math.floor((e.clientY - rect.top) * scaleY / zoomLevel);
+
+      // Create a temporary canvas to composite everything
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = bgCanvas.width;
+      tempCanvas.height = bgCanvas.height;
+      const tempCtx = tempCanvas.getContext('2d')!;
+
+      tempCtx.drawImage(bgCanvas, 0, 0);
+      layers.forEach(layer => tempCtx.drawImage(layer.canvas, 0, 0));
+
+      const pixel = tempCtx.getImageData(x, y, 1, 1).data;
+      if (pixel[3] > 0) { // If not fully transparent
+        const hex = rgbToHex(pixel[0], pixel[1], pixel[2]);
+        colorPicker.value = hex;
+      }
+    }
+  }
+
+  function bindCanvasEvents(canvasEl: HTMLCanvasElement) {
+    canvasEl.addEventListener('pointerdown', startDrawing);
+    canvasEl.addEventListener('pointermove', draw);
+    canvasEl.addEventListener('pointerup', stopDrawing);
+    canvasEl.addEventListener('pointerout', stopDrawing);
+    canvasEl.addEventListener('pointercancel', stopDrawing);
+    canvasEl.addEventListener('click', handleCanvasClick);
+
+    // Prevent default touch behaviors on the canvas to stop scrolling
+    canvasEl.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    canvasEl.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+  }
+
+  // Bind to initial layer
+  bindCanvasEvents(initialCanvas);
+
+  // Helper functions
+  function hexToRgb(hex: string) {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+      a: 255
+    } : { r: 0, g: 0, b: 0, a: 255 };
+  }
+
+  function rgbToHex(r: number, g: number, b: number) {
+    return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1);
+  }
+
+  // Flood Fill Algorithm (BFS)
+  function floodFill(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, startX: number, startY: number, fillColor: {r: number, g: number, b: number, a: number}) {
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const width = canvas.width;
+    const height = canvas.height;
+
+    const targetPos = (startY * width + startX) * 4;
+    const targetR = data[targetPos];
+    const targetG = data[targetPos + 1];
+    const targetB = data[targetPos + 2];
+    const targetA = data[targetPos + 3];
+
+    // If target color is same as fill color, do nothing
+    if (targetR === fillColor.r && targetG === fillColor.g && targetB === fillColor.b && targetA === fillColor.a) {
+      return;
+    }
+
+    const queue = [[startX, startY]];
+
+    function matchColor(pos: number) {
+      return data[pos] === targetR && data[pos + 1] === targetG && data[pos + 2] === targetB && data[pos + 3] === targetA;
+    }
+
+    function setColor(pos: number) {
+      data[pos] = fillColor.r;
+      data[pos + 1] = fillColor.g;
+      data[pos + 2] = fillColor.b;
+      data[pos + 3] = fillColor.a;
+    }
+
+    while (queue.length > 0) {
+      const [x, y] = queue.shift()!;
+      let pos = (y * width + x) * 4;
+
+      if (x < 0 || x >= width || y < 0 || y >= height || !matchColor(pos)) {
+        continue;
+      }
+
+      // Move left to edge
+      let lx = x;
+      while (lx >= 0 && matchColor((y * width + lx) * 4)) {
+        setColor((y * width + lx) * 4);
+        lx--;
+      }
+
+      // Move right to edge
+      let rx = x + 1;
+      while (rx < width && matchColor((y * width + rx) * 4)) {
+        setColor((y * width + rx) * 4);
+        rx++;
+      }
+
+      // Scan rows above and below
+      for (const scanY of [y - 1, y + 1]) {
+        if (scanY < 0 || scanY >= height) continue;
+
+        let spanLeft = false;
+        for (let i = lx + 1; i < rx; i++) {
+          const checkPos = (scanY * width + i) * 4;
+          if (matchColor(checkPos)) {
+            if (!spanLeft) {
+              queue.push([i, scanY]);
+              spanLeft = true;
+            }
+          } else {
+            spanLeft = false;
+          }
+        }
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+  }
 </script>
