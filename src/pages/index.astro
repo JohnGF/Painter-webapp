@@ -82,7 +82,7 @@ import Layout from '../layouts/Layout.astro';
           </div>
         </div>
       </div>
-
+      
       <div class="layers-panel">
         <h3>Layers</h3>
         <ul id="layers-list">
@@ -279,12 +279,12 @@ import Layout from '../layouts/Layout.astro';
   // DOM Elements
   const bgCanvas = document.getElementById('bg-canvas') as HTMLCanvasElement;
   const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
-
+  
   const layersContainer = document.getElementById('layers-container') as HTMLDivElement;
   const layersList = document.getElementById('layers-list') as HTMLUListElement;
   const addLayerBtn = document.getElementById('add-layer-btn') as HTMLButtonElement;
   const zoomWrapper = document.getElementById('zoom-wrapper') as HTMLDivElement;
-
+  
   const imageUpload = document.getElementById('image-upload') as HTMLInputElement;
   const colorPicker = document.getElementById('color-picker') as HTMLInputElement;
   const swatches = document.querySelectorAll('.swatch');
@@ -294,7 +294,7 @@ import Layout from '../layouts/Layout.astro';
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
-
+  
   const polygonControls = document.getElementById('polygon-controls') as HTMLDivElement;
   const polygonSides = document.getElementById('polygon-sides') as HTMLInputElement;
   const textControls = document.getElementById('text-controls') as HTMLDivElement;
@@ -309,7 +309,7 @@ import Layout from '../layouts/Layout.astro';
     'fill', 'eyedropper', 'line', 'rect', 'circle', 'polygon', 'text', 'pan'
   ] as const;
   type ToolType = typeof tools[number];
-
+  
   const toolBtns: Record<string, HTMLButtonElement> = {};
   tools.forEach(t => {
     toolBtns[t] = document.getElementById(`tool-${t}`) as HTMLButtonElement;
@@ -332,7 +332,7 @@ import Layout from '../layouts/Layout.astro';
   const initialCanvas = document.getElementById('drawing-canvas') as HTMLCanvasElement;
   const initialCtx = initialCanvas.getContext('2d', { willReadFrequently: true })!;
   layers.push({ id: 0, canvas: initialCanvas, ctx: initialCtx, name: 'Layer 1' });
-
+  
   function getActiveCanvas() {
     return layers.find(l => l.id === activeLayerId)!.canvas;
   }
@@ -372,22 +372,6 @@ import Layout from '../layouts/Layout.astro';
     }
   }
 
-  // Undo stack
-  const MAX_UNDO_STEPS = 20;
-  let undoStack: ImageData[] = [];
-  let redoStack: ImageData[] = [];
-
-  function saveUndoState(clearRedo: boolean = true) {
-    if (!ctx) return;
-    undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-    if (undoStack.length > MAX_UNDO_STEPS) {
-      undoStack.shift(); // Remove oldest state
-    }
-    if (clearRedo) {
-      redoStack = []; // Clear redo stack on new actions
-    }
-  }
-
   // Default canvas size
   const defaultWidth = 800;
   const defaultHeight = 600;
@@ -410,7 +394,7 @@ import Layout from '../layouts/Layout.astro';
       const li = document.createElement('li');
       li.className = `layer-item ${layer.id === activeLayerId ? 'active' : ''}`;
       li.textContent = layer.name;
-
+      
       const deleteBtn = document.createElement('span');
       deleteBtn.textContent = '✖';
       deleteBtn.style.color = '#ff4757';
@@ -422,7 +406,7 @@ import Layout from '../layouts/Layout.astro';
         };
         li.appendChild(deleteBtn);
       }
-
+      
       li.onclick = () => setActiveLayer(layer.id);
       layersList.appendChild(li);
     });
@@ -440,13 +424,13 @@ import Layout from '../layouts/Layout.astro';
     canvas.height = bgCanvas.height;
     // Bind global pointer events to the new canvas
     bindCanvasEvents(canvas);
-
+    
     layersContainer.appendChild(canvas);
-
+    
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
     const newLayer = { id: nextLayerId++, canvas, ctx, name: `Layer ${nextLayerId}` };
     layers.push(newLayer);
-
+    
     setActiveLayer(newLayer.id);
     saveState();
   }
@@ -457,7 +441,7 @@ import Layout from '../layouts/Layout.astro';
     const layer = layers[layerIndex];
     layer.canvas.remove();
     layers.splice(layerIndex, 1);
-
+    
     if (activeLayerId === id) {
       activeLayerId = layers[0].id;
     }
@@ -466,7 +450,7 @@ import Layout from '../layouts/Layout.astro';
   }
 
   addLayerBtn.addEventListener('click', addLayer);
-
+  
   // Apply Transform for Zoom/Pan
   function updateTransform() {
     zoomWrapper.style.transform = `translate(${panOffsetX}px, ${panOffsetY}px) scale(${zoomLevel})`;
@@ -513,16 +497,8 @@ import Layout from '../layouts/Layout.astro';
           bgCtx.drawImage(img, 0, 0, width, height);
         }
 
-        if (ctx) {
-          ctx.clearRect(0, 0, width, height);
-        }
-
-        // Clear undo stack when loading a new image to prevent dimension mismatches
         undoStack = [];
         redoStack = [];
-
-        // Save state after image upload
-        // Need to wait slightly for image to be drawn
         setTimeout(saveState, 50);
       };
       if (event.target?.result) {
@@ -547,13 +523,13 @@ import Layout from '../layouts/Layout.astro';
     const lastState = undoStack.pop()!;
     const targetLayer = layers.find(l => l.id === lastState.layerId);
     if (!targetLayer) return;
-
+    
     // Save current before undoing
     redoStack.push({
       layerId: targetLayer.id,
       imageData: targetLayer.ctx.getImageData(0, 0, targetLayer.canvas.width, targetLayer.canvas.height)
     });
-
+    
     targetLayer.ctx.putImageData(lastState.imageData, 0, 0);
     saveState();
   });
@@ -563,44 +539,15 @@ import Layout from '../layouts/Layout.astro';
     const nextState = redoStack.pop()!;
     const targetLayer = layers.find(l => l.id === nextState.layerId);
     if (!targetLayer) return;
-
+    
     // Save current before redoing
     undoStack.push({
       layerId: targetLayer.id,
       imageData: targetLayer.ctx.getImageData(0, 0, targetLayer.canvas.width, targetLayer.canvas.height)
     });
-
+    
     targetLayer.ctx.putImageData(nextState.imageData, 0, 0);
     saveState();
-    if (ctx) {
-      saveUndoState();
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      saveState();
-    }
-  });
-
-  // Handle undo button
-  undoBtn.addEventListener('click', () => {
-    if (undoStack.length > 0 && ctx) {
-      redoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      const lastState = undoStack.pop();
-      if (lastState) {
-        ctx.putImageData(lastState, 0, 0);
-        saveState();
-      }
-    }
-  });
-
-  // Handle redo button
-  redoBtn.addEventListener('click', () => {
-    if (redoStack.length > 0 && ctx) {
-      undoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
-      const nextState = redoStack.pop();
-      if (nextState) {
-        ctx.putImageData(nextState, 0, 0);
-        saveState();
-      }
-    }
   });
 
   // Handle export button
@@ -616,11 +563,7 @@ import Layout from '../layouts/Layout.astro';
       layers.forEach(layer => {
         exportCtx.drawImage(layer.canvas, 0, 0);
       });
-
-      // Draw drawings on top
-      exportCtx.drawImage(canvas, 0, 0);
       
-      // Trigger download
       const dataURL = exportCanvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.download = 'painting-export.png';
@@ -691,7 +634,7 @@ import Layout from '../layouts/Layout.astro';
     if (currentTool === 'text') {
       return;
     }
-
+    
     // Fill tool is click-based
     if (currentTool === 'fill') {
       return;
@@ -738,7 +681,7 @@ import Layout from '../layouts/Layout.astro';
     }
 
     if (!isDrawing) return;
-
+    
     const canvas = getActiveCanvas();
     const ctx = getActiveCtx();
 
@@ -819,7 +762,7 @@ import Layout from '../layouts/Layout.astro';
       if (snapshot) {
         ctx.putImageData(snapshot, 0, 0);
       }
-
+      
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = colorPicker.value;
       ctx.lineWidth = size;
@@ -857,6 +800,7 @@ import Layout from '../layouts/Layout.astro';
   }
 
   function drawPolygon(x1: number, y1: number, x2: number, y2: number, sides: number, size: number) {
+    const ctx = getActiveCtx();
     if (!ctx || sides < 3) return;
     
     const radius = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
@@ -886,6 +830,7 @@ import Layout from '../layouts/Layout.astro';
   let sprayInterval: number | null = null;
 
   function spray(x: number, y: number, size: number) {
+    const ctx = getActiveCtx();
     if (!ctx) return;
 
     // Adjust density based on size
@@ -923,7 +868,7 @@ import Layout from '../layouts/Layout.astro';
   function saveState() {
     try {
       localStorage.setItem('painter-bg', bgCanvas.toDataURL());
-
+      
       // Save all layers
       const layersData = layers.map(l => ({
         id: l.id,
@@ -931,7 +876,7 @@ import Layout from '../layouts/Layout.astro';
         data: l.canvas.toDataURL()
       }));
       localStorage.setItem('painter-layers', JSON.stringify(layersData));
-
+      
       localStorage.setItem('painter-width', bgCanvas.width.toString());
       localStorage.setItem('painter-height', bgCanvas.height.toString());
     } catch (e) {
@@ -961,12 +906,12 @@ import Layout from '../layouts/Layout.astro';
         bgImg.src = bgData;
 
         const layersData = JSON.parse(layersDataStr);
-
+        
         // Clear existing layers except the first one
         while (layers.length > 1) {
           deleteLayer(layers[1].id);
         }
-
+        
         if (layersData.length > 0) {
           // Update first layer
           layers[0].canvas.width = width;
@@ -982,18 +927,18 @@ import Layout from '../layouts/Layout.astro';
           // Add remaining layers
           for (let i = 1; i < layersData.length; i++) {
             const data = layersData[i];
-
+            
             const canvas = document.createElement('canvas');
             canvas.className = 'layer-canvas';
             canvas.width = width;
             canvas.height = height;
             bindCanvasEvents(canvas);
             layersContainer.appendChild(canvas);
-
+            
             const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
             const newLayer = { id: nextLayerId++, canvas, ctx, name: data.name };
             layers.push(newLayer);
-
+            
             const img = new Image();
             img.onload = () => {
               ctx.clearRect(0, 0, width, height);
@@ -1002,7 +947,7 @@ import Layout from '../layouts/Layout.astro';
             img.src = data.data;
           }
         }
-
+        
         setActiveLayer(layers[0].id);
       }
     } catch (e) {
@@ -1021,10 +966,10 @@ import Layout from '../layouts/Layout.astro';
 
     if (!isDrawing) return;
     isDrawing = false;
-
+    
     const ctx = getActiveCtx();
     ctx.beginPath(); // Reset path to prevent connecting unexpected lines
-
+    
     if (sprayInterval !== null) {
       clearInterval(sprayInterval);
       sprayInterval = null;
@@ -1038,46 +983,46 @@ import Layout from '../layouts/Layout.astro';
     if (currentTool === 'text') {
       const text = textInput.value;
       if (!text) return;
-
+      
       saveUndoState();
-
+      
       const canvas = getActiveCanvas();
       const ctx = getActiveCtx();
-
+      
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width / zoomLevel);
       const scaleY = canvas.height / (rect.height / zoomLevel);
-
+      
       const x = (e.clientX - rect.left) * scaleX / zoomLevel;
       const y = (e.clientY - rect.top) * scaleY / zoomLevel;
-
+      
       const size = parseInt(brushSize.value, 10);
       ctx.font = `${size * 5}px sans-serif`;
       ctx.fillStyle = colorPicker.value;
       ctx.fillText(text, x, y);
-
+      
       saveState();
     } else if (currentTool === 'fill') {
       saveUndoState();
       const canvas = getActiveCanvas();
       const ctx = getActiveCtx();
-
+      
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width / zoomLevel);
       const scaleY = canvas.height / (rect.height / zoomLevel);
-
+      
       const x = Math.floor((e.clientX - rect.left) * scaleX / zoomLevel);
       const y = Math.floor((e.clientY - rect.top) * scaleY / zoomLevel);
-
+      
       floodFill(canvas, ctx, x, y, hexToRgb(colorPicker.value));
       saveState();
     } else if (currentTool === 'eyedropper') {
       const canvas = getActiveCanvas();
-
+      
       const rect = canvas.getBoundingClientRect();
       const scaleX = canvas.width / (rect.width / zoomLevel);
       const scaleY = canvas.height / (rect.height / zoomLevel);
-
+      
       const x = Math.floor((e.clientX - rect.left) * scaleX / zoomLevel);
       const y = Math.floor((e.clientY - rect.top) * scaleY / zoomLevel);
 
@@ -1086,10 +1031,10 @@ import Layout from '../layouts/Layout.astro';
       tempCanvas.width = bgCanvas.width;
       tempCanvas.height = bgCanvas.height;
       const tempCtx = tempCanvas.getContext('2d')!;
-
+      
       tempCtx.drawImage(bgCanvas, 0, 0);
       layers.forEach(layer => tempCtx.drawImage(layer.canvas, 0, 0));
-
+      
       const pixel = tempCtx.getImageData(x, y, 1, 1).data;
       if (pixel[3] > 0) { // If not fully transparent
         const hex = rgbToHex(pixel[0], pixel[1], pixel[2]);
@@ -1148,7 +1093,7 @@ import Layout from '../layouts/Layout.astro';
     }
 
     const queue = [[startX, startY]];
-
+    
     function matchColor(pos: number) {
       return data[pos] === targetR && data[pos + 1] === targetG && data[pos + 2] === targetB && data[pos + 3] === targetA;
     }
@@ -1185,7 +1130,7 @@ import Layout from '../layouts/Layout.astro';
       // Scan rows above and below
       for (const scanY of [y - 1, y + 1]) {
         if (scanY < 0 || scanY >= height) continue;
-
+        
         let spanLeft = false;
         for (let i = lx + 1; i < rx; i++) {
           const checkPos = (scanY * width + i) * 4;
