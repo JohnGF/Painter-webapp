@@ -97,9 +97,13 @@ import Layout from '../layouts/Layout.astro';
 
 <style>
   .container {
-    max-width: 900px;
-    margin: 0 auto;
+    max-width: 100%;
+    height: 100vh;
+    margin: 0;
     padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   }
 
@@ -135,7 +139,9 @@ import Layout from '../layouts/Layout.astro';
   .workspace {
     display: flex;
     gap: 20px;
-    align-items: flex-start;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
   }
 
   .canvas-container {
@@ -147,9 +153,11 @@ import Layout from '../layouts/Layout.astro';
     border: 2px dashed #ccc;
     border-radius: 8px;
     background-color: #e5e5e5;
-    min-height: 500px;
+    min-height: 300px;
+    height: 100%;
     overflow: auto; /* Allow scrolling if canvas is larger than container */
     padding: 10px;
+    box-sizing: border-box;
   }
 
   canvas {
@@ -380,8 +388,11 @@ import Layout from '../layouts/Layout.astro';
   }
 
   // Default canvas size
-  const defaultWidth = 800;
-  const defaultHeight = 600;
+  const canvasContainerNode = document.getElementById('canvas-wrapper') as HTMLDivElement;
+  const cw = canvasContainerNode.clientWidth;
+  const ch = canvasContainerNode.clientHeight;
+  const defaultWidth = cw > 0 ? cw - 24 : 800;
+  const defaultHeight = ch > 0 ? ch - 24 : 600;
 
   bgCanvas.width = defaultWidth;
   bgCanvas.height = defaultHeight;
@@ -542,8 +553,10 @@ import Layout from '../layouts/Layout.astro';
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        const MAX_WIDTH = 1000;
-        const MAX_HEIGHT = 800;
+        const cw = canvasContainerNode.clientWidth;
+        const ch = canvasContainerNode.clientHeight;
+        const MAX_WIDTH = cw > 0 ? cw - 24 : 1000;
+        const MAX_HEIGHT = ch > 0 ? ch - 24 : 800;
 
         let width = img.width;
         let height = img.height;
