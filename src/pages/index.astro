@@ -68,6 +68,7 @@ import Layout from '../layouts/Layout.astro';
           <button id="undo-btn" style="background-color: #f39c12;">Undo</button>
           <button id="redo-btn" style="background-color: #f39c12;">Redo</button>
           <button id="clear-btn">Clear Layer</button>
+          <button id="reset-all-btn" style="background-color: #ff4757;">Reset All</button>
           <button id="export-btn" style="background-color: #2ed573;">Export</button>
         </div>
       </div>
@@ -307,6 +308,7 @@ import Layout from '../layouts/Layout.astro';
   const undoBtn = document.getElementById('undo-btn') as HTMLButtonElement;
   const redoBtn = document.getElementById('redo-btn') as HTMLButtonElement;
   const clearBtn = document.getElementById('clear-btn') as HTMLButtonElement;
+  const resetAllBtn = document.getElementById('reset-all-btn') as HTMLButtonElement;
   const exportBtn = document.getElementById('export-btn') as HTMLButtonElement;
   const paintBehindToggle = document.getElementById('paint-behind-toggle') as HTMLInputElement;
 
@@ -593,6 +595,57 @@ import Layout from '../layouts/Layout.astro';
     };
     reader.readAsDataURL(file);
   });
+
+
+  // Reset All Logic
+  resetAllBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to reset everything? This will clear all layers and the uploaded image.')) {
+      // Clear original image
+      originalBgImage = null;
+      imageUpload.value = '';
+
+      // Set dimensions to default
+      const cw = canvasContainerNode.clientWidth;
+      const ch = canvasContainerNode.clientHeight;
+      const defaultWidth = cw > 0 ? cw - 24 : 800;
+      const defaultHeight = ch > 0 ? ch - 24 : 600;
+
+      bgCanvas.width = defaultWidth;
+      bgCanvas.height = defaultHeight;
+      lineArtCanvas.width = defaultWidth;
+      lineArtCanvas.height = defaultHeight;
+
+      // Fill background with white
+      if (bgCtx) {
+        bgCtx.fillStyle = '#ffffff';
+        bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      }
+
+      // Clear line art
+      lineArtCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+
+      // Remove extra layers
+      while (layers.length > 1) {
+        deleteLayer(layers[1].id);
+      }
+
+      // Reset layer 1
+      const firstLayer = layers[0];
+      firstLayer.canvas.width = defaultWidth;
+      firstLayer.canvas.height = defaultHeight;
+      firstLayer.ctx.clearRect(0, 0, defaultWidth, defaultHeight);
+
+      // Reset stacks
+      undoStack = [];
+      redoStack = [];
+
+      // Reset active layer
+      setActiveLayer(firstLayer.id);
+
+      saveState();
+    }
+  });
+
 
   // Clear Active Layer
   clearBtn.addEventListener('click', () => {
