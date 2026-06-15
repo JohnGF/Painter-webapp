@@ -926,6 +926,11 @@ import Layout from '../layouts/Layout.astro';
       return;
     }
 
+    // Stamp tool is click-based
+    if (currentTool === 'stamp') {
+      return;
+    }
+
     isDrawing = true;
 
     // Save the undo state before we modify the canvas
@@ -1508,16 +1513,35 @@ import Layout from '../layouts/Layout.astro';
 
   // Flood Fill Algorithm (BFS)
   function floodFill(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, startX: number, startY: number, fillColor: {r: number, g: number, b: number, a: number}) {
-    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
     const width = canvas.width;
     const height = canvas.height;
 
+    // Create a composite canvas to sample from
+    const compCanvas = document.createElement('canvas');
+    compCanvas.width = width;
+    compCanvas.height = height;
+    const compCtx = compCanvas.getContext('2d', { willReadFrequently: true })!;
+
+    // Draw background
+    compCtx.drawImage(bgCanvas, 0, 0);
+
+    // Draw all layers
+    layers.forEach(layer => compCtx.drawImage(layer.canvas, 0, 0));
+
+    // Draw line art if it is active (Color Behind Lines)
+    if (paintBehindToggle.checked) {
+      compCtx.drawImage(lineArtCanvas, 0, 0);
+    }
+
+    const compData = compCtx.getImageData(0, 0, width, height).data;
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
+
     const targetPos = (startY * width + startX) * 4;
-    const targetR = data[targetPos];
-    const targetG = data[targetPos + 1];
-    const targetB = data[targetPos + 2];
-    const targetA = data[targetPos + 3];
+    const targetR = compData[targetPos];
+    const targetG = compData[targetPos + 1];
+    const targetB = compData[targetPos + 2];
+    const targetA = compData[targetPos + 3];
 
     // If target color is same as fill color, do nothing
     if (targetR === fillColor.r && targetG === fillColor.g && targetB === fillColor.b && targetA === fillColor.a) {
@@ -1526,11 +1550,24 @@ import Layout from '../layouts/Layout.astro';
 
     const queue = [[startX, startY]];
 
+    // Small tolerance for matching colors to handle anti-aliasing
+    const tolerance = 10;
+
     function matchColor(pos: number) {
-      return data[pos] === targetR && data[pos + 1] === targetG && data[pos + 2] === targetB && data[pos + 3] === targetA;
+      return Math.abs(compData[pos] - targetR) <= tolerance &&
+             Math.abs(compData[pos + 1] - targetG) <= tolerance &&
+             Math.abs(compData[pos + 2] - targetB) <= tolerance &&
+             Math.abs(compData[pos + 3] - targetA) <= tolerance;
     }
 
     function setColor(pos: number) {
+      // Mark as filled in composite data so we don't revisit
+      compData[pos] = fillColor.r;
+      compData[pos + 1] = fillColor.g;
+      compData[pos + 2] = fillColor.b;
+      compData[pos + 3] = fillColor.a;
+
+      // Actually set the color on the active layer
       data[pos] = fillColor.r;
       data[pos + 1] = fillColor.g;
       data[pos + 2] = fillColor.b;
