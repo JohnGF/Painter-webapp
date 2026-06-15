@@ -32,6 +32,19 @@ import Layout from '../layouts/Layout.astro';
           <button id="tool-polygon" class="tool-btn" title="Polygon">⬠</button>
           <button id="tool-text" class="tool-btn" title="Text">T</button>
           <button id="tool-pan" class="tool-btn" title="Pan">✋</button>
+          <button id="tool-stamp" class="tool-btn" title="Pattern Stamp">🌟</button>
+        </div>
+
+        <div class="control-item" id="stamp-controls" style="display: none;">
+          <label for="pattern-upload">Pattern:</label>
+          <input type="file" id="pattern-upload" accept="image/*" style="width: 150px;" />
+        </div>
+
+        <div class="control-item">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Fill shapes (Rectangle, Circle, Polygon)">
+            <input type="checkbox" id="fill-shapes-toggle" />
+            Fill Shapes
+          </label>
         </div>
 
         <div class="control-item" id="text-controls" style="display: none;">
@@ -195,6 +208,7 @@ import Layout from '../layouts/Layout.astro';
   }
 
   .layers-panel {
+    display: none;
     width: 200px;
     background: #f9f9f9;
     padding: 15px;
@@ -319,11 +333,29 @@ import Layout from '../layouts/Layout.astro';
   const zoomInBtn = document.getElementById('zoom-in-btn') as HTMLButtonElement;
   const zoomOutBtn = document.getElementById('zoom-out-btn') as HTMLButtonElement;
   const zoomDisplay = document.getElementById('zoom-display') as HTMLSpanElement;
+  const stampControls = document.getElementById('stamp-controls') as HTMLDivElement;
+  const patternUpload = document.getElementById('pattern-upload') as HTMLInputElement;
+
+  let patternImg: HTMLImageElement | null = null;
+  patternUpload.addEventListener('change', (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          patternImg = img;
+        };
+        if (event.target?.result) img.src = event.target.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  });
 
   // Tools mapping
   const tools = [
     'brush', 'pencil', 'highlighter', 'crayon', 'sprayer', 'eraser',
-    'fill', 'eyedropper', 'line', 'rect', 'circle', 'polygon', 'text', 'pan'
+    'fill', 'eyedropper', 'line', 'rect', 'circle', 'polygon', 'text', 'pan', 'stamp'
   ] as const;
   type ToolType = typeof tools[number];
 
@@ -794,6 +826,7 @@ import Layout from '../layouts/Layout.astro';
 
     polygonControls.style.display = tool === 'polygon' ? 'flex' : 'none';
     textControls.style.display = tool === 'text' ? 'flex' : 'none';
+    stampControls.style.display = tool === 'stamp' ? 'flex' : 'none';
 
     // Update cursor depending on tool
     const canvases = document.querySelectorAll('.layer-canvas');
@@ -979,12 +1012,24 @@ import Layout from '../layouts/Layout.astro';
       } else if (currentTool === 'rect') {
         ctx.beginPath();
         ctx.rect(startX, startY, currentX - startX, currentY - startY);
-        ctx.stroke();
+        const fillShapes = (document.getElementById('fill-shapes-toggle') as HTMLInputElement)?.checked;
+        if (fillShapes) {
+          ctx.fillStyle = colorPicker.value;
+          ctx.fill();
+        } else {
+          ctx.stroke();
+        }
       } else if (currentTool === 'circle') {
         const radius = Math.sqrt(Math.pow(currentX - startX, 2) + Math.pow(currentY - startY, 2));
         ctx.beginPath();
         ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
-        ctx.stroke();
+        const fillShapes = (document.getElementById('fill-shapes-toggle') as HTMLInputElement)?.checked;
+        if (fillShapes) {
+          ctx.fillStyle = colorPicker.value;
+          ctx.fill();
+        } else {
+          ctx.stroke();
+        }
       }
     } else if (currentTool === 'sprayer') {
       // Sprayer is handled differently, often with an interval,
@@ -1022,7 +1067,14 @@ import Layout from '../layouts/Layout.astro';
     ctx.lineWidth = size;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.stroke();
+
+    const fillShapes = (document.getElementById('fill-shapes-toggle') as HTMLInputElement)?.checked;
+    if (fillShapes) {
+      ctx.fillStyle = colorPicker.value;
+      ctx.fill();
+    } else {
+      ctx.stroke();
+    }
   }
 
   // Sprayer functionality
@@ -1242,6 +1294,34 @@ import Layout from '../layouts/Layout.astro';
 
       floodFill(canvas, ctx, x, y, hexToRgb(colorPicker.value));
       saveState();
+    } else if (currentTool === 'stamp') {
+      if (patternImg) {
+        saveUndoState();
+        const canvas = getActiveCanvas();
+        const ctx = getActiveCtx();
+
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / (rect.width / zoomLevel);
+        const scaleY = canvas.height / (rect.height / zoomLevel);
+
+        const x = Math.floor((e.clientX - rect.left) * scaleX / zoomLevel);
+        const y = Math.floor((e.clientY - rect.top) * scaleY / zoomLevel);
+
+        // Stamp the pattern image centered at the click coordinates
+        const imgW = patternImg.width;
+        const imgH = patternImg.height;
+        const size = parseInt(brushSize.value, 10);
+
+        // Scale the image based on brush size. Default brush size is 5, let's treat 5 as 1x scale.
+        const scale = size / 5;
+        const finalW = imgW * scale;
+        const finalH = imgH * scale;
+
+        ctx.drawImage(patternImg, x - finalW / 2, y - finalH / 2, finalW, finalH);
+        saveState();
+      } else {
+        alert("Please upload a pattern image first.");
+      }
     } else if (currentTool === 'eyedropper') {
       const canvas = getActiveCanvas();
 
