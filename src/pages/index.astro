@@ -33,6 +33,7 @@ import Layout from '../layouts/Layout.astro';
           <button id="tool-text" class="tool-btn" title="Text">T</button>
           <button id="tool-pan" class="tool-btn" title="Pan">✋</button>
           <button id="tool-stamp" class="tool-btn" title="Pattern Stamp">🌟</button>
+          <button id="tool-pixel" class="tool-btn" title="Pixel / Square">🧊</button>
         </div>
 
         <div class="control-item" id="stamp-controls" style="display: none;">
@@ -45,6 +46,15 @@ import Layout from '../layouts/Layout.astro';
             <input type="checkbox" id="fill-shapes-toggle" />
             Fill Shapes
           </label>
+        </div>
+
+        <div class="control-item" id="pixel-controls" style="display: none; align-items: center; gap: 10px;">
+          <label style="cursor: pointer; display: flex; align-items: center; gap: 4px;" title="Toggle Grid Visibility">
+            <input type="checkbox" id="grid-toggle" />
+            Show Grid
+          </label>
+          <label for="grid-size">Grid Size:</label>
+          <input type="number" id="grid-size" min="2" max="100" value="10" style="width: 50px;" />
         </div>
 
         <div class="control-item" id="text-controls" style="display: none;">
@@ -94,6 +104,7 @@ import Layout from '../layouts/Layout.astro';
           <div id="layers-container">
             <canvas id="drawing-canvas" class="layer-canvas" data-layer-id="0"></canvas>
           </div>
+          <canvas id="grid-canvas" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
           <canvas id="line-art-canvas" style="position: absolute; top: 0; left: 0; pointer-events: none;"></canvas>
         </div>
       </div>
@@ -305,6 +316,8 @@ import Layout from '../layouts/Layout.astro';
   // DOM Elements
   const bgCanvas = document.getElementById('bg-canvas') as HTMLCanvasElement;
   const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
+  const gridCanvas = document.getElementById('grid-canvas') as HTMLCanvasElement;
+  const gridCtx = gridCanvas.getContext('2d')!;
   const lineArtCanvas = document.getElementById('line-art-canvas') as HTMLCanvasElement;
   const lineArtCtx = lineArtCanvas.getContext('2d', { willReadFrequently: true })!;
 
@@ -355,7 +368,7 @@ import Layout from '../layouts/Layout.astro';
   // Tools mapping
   const tools = [
     'brush', 'pencil', 'highlighter', 'crayon', 'sprayer', 'eraser',
-    'fill', 'eyedropper', 'line', 'rect', 'circle', 'polygon', 'text', 'pan', 'stamp'
+    'fill', 'eyedropper', 'line', 'rect', 'circle', 'polygon', 'text', 'pan', 'stamp', 'pixel'
   ] as const;
   type ToolType = typeof tools[number];
 
@@ -428,8 +441,36 @@ import Layout from '../layouts/Layout.astro';
   const defaultWidth = cw > 0 ? cw - 24 : 800;
   const defaultHeight = ch > 0 ? ch - 24 : 600;
 
+  function updateGrid() {
+    const showGrid = (document.getElementById('grid-toggle') as HTMLInputElement).checked;
+    const sizeInput = parseInt((document.getElementById('grid-size') as HTMLInputElement).value, 10) || 10;
+
+    gridCtx.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+
+    if (showGrid && sizeInput > 1) {
+      gridCtx.beginPath();
+      gridCtx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+      gridCtx.lineWidth = 1;
+
+      for (let x = 0; x <= gridCanvas.width; x += sizeInput) {
+        gridCtx.moveTo(x, 0);
+        gridCtx.lineTo(x, gridCanvas.height);
+      }
+      for (let y = 0; y <= gridCanvas.height; y += sizeInput) {
+        gridCtx.moveTo(0, y);
+        gridCtx.lineTo(gridCanvas.width, y);
+      }
+      gridCtx.stroke();
+    }
+  }
+
+  (document.getElementById('grid-toggle') as HTMLInputElement).addEventListener('change', updateGrid);
+  (document.getElementById('grid-size') as HTMLInputElement).addEventListener('input', updateGrid);
+
   bgCanvas.width = defaultWidth;
   bgCanvas.height = defaultHeight;
+  gridCanvas.width = defaultWidth;
+  gridCanvas.height = defaultHeight;
   initialCanvas.width = defaultWidth;
   initialCanvas.height = defaultHeight;
 
@@ -606,6 +647,9 @@ import Layout from '../layouts/Layout.astro';
 
         bgCanvas.width = width;
         bgCanvas.height = height;
+        gridCanvas.width = width;
+        gridCanvas.height = height;
+        updateGrid();
         lineArtCanvas.width = width;
         lineArtCanvas.height = height;
         layers.forEach(layer => {
@@ -644,6 +688,9 @@ import Layout from '../layouts/Layout.astro';
 
       bgCanvas.width = defaultWidth;
       bgCanvas.height = defaultHeight;
+      gridCanvas.width = defaultWidth;
+      gridCanvas.height = defaultHeight;
+      updateGrid();
       lineArtCanvas.width = defaultWidth;
       lineArtCanvas.height = defaultHeight;
 
@@ -827,6 +874,8 @@ import Layout from '../layouts/Layout.astro';
     polygonControls.style.display = tool === 'polygon' ? 'flex' : 'none';
     textControls.style.display = tool === 'text' ? 'flex' : 'none';
     stampControls.style.display = tool === 'stamp' ? 'flex' : 'none';
+    const pixelControls = document.getElementById('pixel-controls') as HTMLDivElement;
+    pixelControls.style.display = tool === 'pixel' ? 'flex' : 'none';
 
     // Update cursor depending on tool
     const canvases = document.querySelectorAll('.layer-canvas');
@@ -1035,6 +1084,27 @@ import Layout from '../layouts/Layout.astro';
       // Sprayer is handled differently, often with an interval,
       // but we can also spray immediately on move
       spray(currentX, currentY, size);
+    } else if (currentTool === 'pixel') {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = colorPicker.value;
+
+      const gridSize = parseInt((document.getElementById('grid-size') as HTMLInputElement).value, 10) || 10;
+
+      // Interpolate to avoid gaps when moving fast
+      const distance = Math.sqrt(Math.pow(currentX - lastX, 2) + Math.pow(currentY - lastY, 2));
+      const steps = Math.max(1, Math.floor(distance / (gridSize / 2)));
+
+      for (let i = 0; i <= steps; i++) {
+        const t = steps === 0 ? 0 : i / steps;
+        const x = lastX + (currentX - lastX) * t;
+        const y = lastY + (currentY - lastY) * t;
+
+        // Snap to grid
+        const snappedX = Math.floor(x / gridSize) * gridSize;
+        const snappedY = Math.floor(y / gridSize) * gridSize;
+
+        ctx.fillRect(snappedX, snappedY, gridSize, gridSize);
+      }
     }
 
     if (!['polygon', 'line', 'rect', 'circle'].includes(currentTool)) {
@@ -1162,6 +1232,9 @@ import Layout from '../layouts/Layout.astro';
 
         bgCanvas.width = width;
         bgCanvas.height = height;
+        gridCanvas.width = width;
+        gridCanvas.height = height;
+        updateGrid();
         lineArtCanvas.width = width;
         lineArtCanvas.height = height;
 
@@ -1293,6 +1366,28 @@ import Layout from '../layouts/Layout.astro';
       const y = Math.floor((e.clientY - rect.top) * scaleY / zoomLevel);
 
       floodFill(canvas, ctx, x, y, hexToRgb(colorPicker.value));
+      saveState();
+    } else if (currentTool === 'pixel') {
+      // Just to handle a single click as a single pixel draw
+      saveUndoState();
+      const canvas = getActiveCanvas();
+      const ctx = getActiveCtx();
+
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / (rect.width / zoomLevel);
+      const scaleY = canvas.height / (rect.height / zoomLevel);
+
+      const x = (e.clientX - rect.left) * scaleX / zoomLevel;
+      const y = (e.clientY - rect.top) * scaleY / zoomLevel;
+
+      const gridSize = parseInt((document.getElementById('grid-size') as HTMLInputElement).value, 10) || 10;
+      const snappedX = Math.floor(x / gridSize) * gridSize;
+      const snappedY = Math.floor(y / gridSize) * gridSize;
+
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = colorPicker.value;
+      ctx.fillRect(snappedX, snappedY, gridSize, gridSize);
+
       saveState();
     } else if (currentTool === 'stamp') {
       if (patternImg) {
