@@ -4,16 +4,25 @@ import Layout from '../layouts/Layout.astro';
 
 <Layout>
   <main class="container">
-    <h1>Image Painter</h1>
+    <button id="toolbox-toggle-btn" class="floating-toggle-btn" style="display: none;" title="Toggle Tools">☰ Tools</button>
+    <h1 id="main-title">Image Painter</h1>
 
-    <div class="controls">
-      <div class="control-group">
+    <div class="controls" id="main-controls">
+      <div class="control-group" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div>
         <label for="image-upload" class="file-label">Upload Image</label>
         <input type="file" id="image-upload" accept="image/*" />
         <label style="margin-left: 15px; font-weight: bold; cursor: pointer;">
           <input type="checkbox" id="paint-behind-toggle" />
           Color Behind Lines (Line Art Mode)
         </label>
+        </div>
+        <div>
+          <label style="font-weight: bold; cursor: pointer;" title="Switch to floating toolbox for tablet optimization">
+            <input type="checkbox" id="floating-ui-toggle" />
+            Floating UI Mode
+          </label>
+        </div>
       </div>
 
       <div class="drawing-controls">
@@ -310,6 +319,48 @@ import Layout from '../layouts/Layout.astro';
   button:hover {
     background-color: #ff6b81;
   }
+
+  .floating-toggle-btn {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 1000;
+    background-color: #333;
+    color: white;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    padding: 10px 20px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+
+  .floating-toggle-btn:hover {
+    background-color: #555;
+  }
+
+  /* Floating mode specific styles */
+  :global(.controls.floating) {
+    position: fixed;
+    top: 60px;
+    left: 15px;
+    z-index: 999;
+    max-width: 90vw;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    background-color: rgba(249, 249, 249, 0.95);
+    backdrop-filter: blur(5px);
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
+
+  :global(.controls.floating.collapsed) {
+    transform: translateX(-120%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  :global(.title-floating) {
+    margin-left: 120px; /* Make room for the toggle button */
+  }
 </style>
 
 <script>
@@ -349,6 +400,11 @@ import Layout from '../layouts/Layout.astro';
   const stampControls = document.getElementById('stamp-controls') as HTMLDivElement;
   const patternUpload = document.getElementById('pattern-upload') as HTMLInputElement;
 
+  const toolboxToggleBtn = document.getElementById('toolbox-toggle-btn') as HTMLButtonElement;
+  const floatingUiToggle = document.getElementById('floating-ui-toggle') as HTMLInputElement;
+  const mainControls = document.getElementById('main-controls') as HTMLDivElement;
+  const mainTitle = document.getElementById('main-title') as HTMLHeadingElement;
+
   let patternImg: HTMLImageElement | null = null;
   patternUpload.addEventListener('change', (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -378,6 +434,41 @@ import Layout from '../layouts/Layout.astro';
   });
 
   let currentTool: ToolType = 'brush';
+
+  // Floating UI State
+  function applyUiMode() {
+    if (floatingUiToggle.checked) {
+      mainControls.classList.add('floating');
+      toolboxToggleBtn.style.display = 'block';
+      mainTitle.classList.add('title-floating');
+    } else {
+      mainControls.classList.remove('floating');
+      mainControls.classList.remove('collapsed');
+      toolboxToggleBtn.style.display = 'none';
+      mainTitle.classList.remove('title-floating');
+    }
+  }
+
+  floatingUiToggle.addEventListener('change', () => {
+    localStorage.setItem('painter-ui-mode', floatingUiToggle.checked ? 'floating' : 'fixed');
+    applyUiMode();
+    // recalculate canvas dimension bounds if needed when layout shifts, although flexbox should handle it.
+  });
+
+  toolboxToggleBtn.addEventListener('click', () => {
+    mainControls.classList.toggle('collapsed');
+  });
+
+  // Initial UI mode load
+  const savedUiMode = localStorage.getItem('painter-ui-mode');
+  if (savedUiMode === 'floating') {
+    floatingUiToggle.checked = true;
+    applyUiMode();
+    // Start collapsed on tablet/mobile by default when in floating mode
+    if (window.innerWidth < 1024) {
+      mainControls.classList.add('collapsed');
+    }
+  }
 
   // Layer State
   let nextLayerId = 1;
