@@ -364,6 +364,9 @@ import Layout from '../layouts/Layout.astro';
 </style>
 
 <script>
+  import { hexToRgb, rgbToHex, hexToHsl, hslToHex } from '../utils/colors';
+  import { matchColor as utilsMatchColor, setColor as utilsSetColor } from '../utils/canvas';
+
   // DOM Elements
   const bgCanvas = document.getElementById('bg-canvas') as HTMLCanvasElement;
   const bgCtx = bgCanvas.getContext('2d', { willReadFrequently: true });
@@ -1553,50 +1556,6 @@ import Layout from '../layouts/Layout.astro';
   bindCanvasEvents(initialCanvas);
 
   // Helper functions
-  function hexToRgb(hex: string) {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16),
-      a: 255
-    } : { r: 0, g: 0, b: 0, a: 255 };
-  }
-
-  function rgbToHex(r: number, g: number, b: number) {
-    return "#" + (1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1);
-  }
-
-  function hexToHsl(hex: string) {
-    let { r, g, b } = hexToRgb(hex);
-    r /= 255; g /= 255; b /= 255;
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, l = (max + min) / 2;
-
-    if (max !== min) {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-        case g: h = (b - r) / d + 2; break;
-        case b: h = (r - g) / d + 4; break;
-      }
-      h /= 6;
-    }
-    return { h: h * 360, s: s * 100, l: l * 100 };
-  }
-
-  function hslToHex(h: number, s: number, l: number) {
-    l /= 100;
-    const a = s * Math.min(l, 1 - l) / 100;
-    const f = (n: number) => {
-      const k = (n + h / 30) % 12;
-      const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-      return Math.round(255 * color).toString(16).padStart(2, '0');
-    };
-    return `#${f(0)}${f(8)}${f(4)}`;
-  }
-
   // Flood Fill Algorithm (BFS)
   function floodFill(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, startX: number, startY: number, fillColor: {r: number, g: number, b: number, a: number}) {
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -1617,36 +1576,25 @@ import Layout from '../layouts/Layout.astro';
 
     const queue = [[startX, startY]];
 
-    function matchColor(pos: number) {
-      return data[pos] === targetR && data[pos + 1] === targetG && data[pos + 2] === targetB && data[pos + 3] === targetA;
-    }
-
-    function setColor(pos: number) {
-      data[pos] = fillColor.r;
-      data[pos + 1] = fillColor.g;
-      data[pos + 2] = fillColor.b;
-      data[pos + 3] = fillColor.a;
-    }
-
     while (queue.length > 0) {
       const [x, y] = queue.shift()!;
       let pos = (y * width + x) * 4;
 
-      if (x < 0 || x >= width || y < 0 || y >= height || !matchColor(pos)) {
+      if (x < 0 || x >= width || y < 0 || y >= height || !utilsMatchColor(data, pos, targetR, targetG, targetB, targetA)) {
         continue;
       }
 
       // Move left to edge
       let lx = x;
-      while (lx >= 0 && matchColor((y * width + lx) * 4)) {
-        setColor((y * width + lx) * 4);
+      while (lx >= 0 && utilsMatchColor(data, (y * width + lx) * 4, targetR, targetG, targetB, targetA)) {
+        utilsSetColor(data, (y * width + lx) * 4, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
         lx--;
       }
 
       // Move right to edge
       let rx = x + 1;
-      while (rx < width && matchColor((y * width + rx) * 4)) {
-        setColor((y * width + rx) * 4);
+      while (rx < width && utilsMatchColor(data, (y * width + rx) * 4, targetR, targetG, targetB, targetA)) {
+        utilsSetColor(data, (y * width + rx) * 4, fillColor.r, fillColor.g, fillColor.b, fillColor.a);
         rx++;
       }
 
@@ -1657,7 +1605,7 @@ import Layout from '../layouts/Layout.astro';
         let spanLeft = false;
         for (let i = lx + 1; i < rx; i++) {
           const checkPos = (scanY * width + i) * 4;
-          if (matchColor(checkPos)) {
+          if (utilsMatchColor(data, checkPos, targetR, targetG, targetB, targetA)) {
             if (!spanLeft) {
               queue.push([i, scanY]);
               spanLeft = true;
